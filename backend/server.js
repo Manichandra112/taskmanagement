@@ -143,6 +143,45 @@ function buildTree(list, parentId = null) {
     }));
 }
 
+// Helper: Get all descendant task IDs recursively
+async function getDescendantIds(parentIds) {
+  if (!parentIds || parentIds.length === 0) return [];
+  const [rows] = await pool.query(
+    'SELECT id FROM tasks WHERE parent_id IN (?)',
+    [parentIds]
+  );
+  if (rows.length === 0) return [];
+  const childIds = rows.map(r => r.id);
+  const nextChildIds = await getDescendantIds(childIds);
+  return [...childIds, ...nextChildIds];
+}
+
+// Helper: Recalculate and update the status of the root-level parent task if the modified task's parent is the root task
+async function syncRootParentStatus(taskId) {
+  if (!taskId) return;
+
+  const [rows] = await pool.query('SELECT parent_id FROM tasks WHERE id = ?', [taskId]);
+  if (rows.length === 0) return;
+  const parentId = rows[0].parent_id;
+  if (!parentId) return;
+
+  // Check if parentId is a root task (meaning its parent_id is null)
+  const [parentRows] = await pool.query('SELECT parent_id FROM tasks WHERE id = ?', [parentId]);
+  if (parentRows.length > 0 && parentRows[0].parent_id === null) {
+    const [children] = await pool.query('SELECT status FROM tasks WHERE parent_id = ?', [parentId]);
+    if (children.length > 0) {
+      const childStatuses = children.map(c => c.status);
+      let newStatus = 'Pending';
+      if (childStatuses.every(status => status === 'Complete')) {
+        newStatus = 'Complete';
+      } else if (childStatuses.some(status => status === 'In Progress' || status === 'Complete')) {
+        newStatus = 'In Progress';
+      }
+      await pool.query('UPDATE tasks SET status = ? WHERE id = ?', [newStatus, parentId]);
+    }
+  }
+}
+
 // --- API Endpoints ---
 
 // Fetch all tasks in hierarchical tree representation
@@ -178,6 +217,9 @@ app.post('/api/tasks', async (req, res) => {
       'INSERT INTO tasks (id, parent_id, title, assignee_id, status, due_date) VALUES (?, ?, ?, ?, ?, ?)',
       [id, parentId || null, title, assigneeId, status || 'Pending', dbDueDate]
     );
+
+    await syncRootParentStatus(id);
+
     res.status(201).json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -220,6 +262,11 @@ app.put('/api/tasks/:id', async (req, res) => {
 
     values.push(taskId);
     await pool.query(`UPDATE tasks SET ${setClause.join(', ')} WHERE id = ?`, values);
+
+    if (updates.status !== undefined) {
+      await syncRootParentStatus(taskId);
+    }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -230,7 +277,28 @@ app.put('/api/tasks/:id', async (req, res) => {
 app.delete('/api/tasks/:id', async (req, res) => {
   const taskId = req.params.id;
   try {
+    const [rows] = await pool.query('SELECT parent_id FROM tasks WHERE id = ?', [taskId]);
+    const parentId = rows.length > 0 ? rows[0].parent_id : null;
+
     await pool.query('DELETE FROM tasks WHERE id = ?', [taskId]);
+
+    if (parentId) {
+      const [parentRows] = await pool.query('SELECT parent_id FROM tasks WHERE id = ?', [parentId]);
+      if (parentRows.length > 0 && parentRows[0].parent_id === null) {
+        const [children] = await pool.query('SELECT status FROM tasks WHERE parent_id = ?', [parentId]);
+        if (children.length > 0) {
+          const childStatuses = children.map(c => c.status);
+          let newStatus = 'Pending';
+          if (childStatuses.every(status => status === 'Complete')) {
+            newStatus = 'Complete';
+          } else if (childStatuses.some(status => status === 'In Progress' || status === 'Complete')) {
+            newStatus = 'In Progress';
+          }
+          await pool.query('UPDATE tasks SET status = ? WHERE id = ?', [newStatus, parentId]);
+        }
+      }
+    }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

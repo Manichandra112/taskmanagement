@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CustomDropdown from './CustomDropdown';
 
 const getTodayDate = () => {
   const now = new Date();
@@ -69,6 +70,10 @@ const getAvatarColor = (name) => {
 };
 
 const getEffectiveStatus = (task) => {
+  if (task.parent_id !== null && task.parent_id !== undefined) {
+    return task.status;
+  }
+
   if (!task.subtasks || task.subtasks.length === 0) {
     return task.status;
   }
@@ -93,17 +98,20 @@ const getProgressPercent = (task) => {
   return Math.round((completed / total) * 100);
 };
 
-const getSubtaskAssigneesRecursive = (task) => {
+const getSubtaskAssigneesRecursive = (task, filterAssignee = 'all') => {
   const assigneesSet = new Set();
-  const traverse = (node) => {
-    for (const child of node.subtasks || []) {
-      if (child.assignee && child.assignee !== 'Unassigned') {
-        assigneesSet.add(child.assignee);
-      }
-      traverse(child);
+  const walk = (node) => {
+    const matchesFilter = filterAssignee === 'all' || node.assignee === filterAssignee;
+    if (matchesFilter && node.assignee && node.assignee !== 'Unassigned') {
+      assigneesSet.add(node.assignee);
+    }
+    if (node.subtasks) {
+      node.subtasks.forEach(walk);
     }
   };
-  traverse(task);
+  if (task.subtasks) {
+    task.subtasks.forEach(walk);
+  }
   return Array.from(assigneesSet);
 };
 
@@ -117,17 +125,23 @@ function TaskRowNode({
   onAddSubtaskClick,
   searchActive,
   todayDate,
+  filterAssignee,
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const effectiveStatus = getEffectiveStatus(task);
   const { completed: completedCount, total: totalCount } = getDirectSubtaskSummary(task);
   const isParentTask = totalCount > 0;
-  const subtaskAssignees = isParentTask ? getSubtaskAssigneesRecursive(task) : [];
-  const expanded = isExpanded || searchActive;
+  const isRootParent = (task.parent_id === null || task.parent_id === undefined) && totalCount > 0;
+  const subtaskAssignees = isRootParent ? getSubtaskAssigneesRecursive(task, filterAssignee) : [];
+  const expanded = isExpanded;
   const progress = getProgressPercent(task);
   const displayDate = effectiveStatus === 'Complete' ? task.dueDate : todayDate;
 
+
   const cycleStatus = () => {
+    if (!task.assignee || task.assignee === 'Unassigned') {
+      return;
+    }
     const cycleMap = {
       Pending: 'In Progress',
       'In Progress': 'Complete',
@@ -174,8 +188,8 @@ function TaskRowNode({
 
   const assigneeBlock = (
     <div className="card-col-assignee">
-      {isParentTask ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+      {isRootParent ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
           {subtaskAssignees.length > 0 ? (
             <div className="avatar-stack">
               {subtaskAssignees.map((name) => (
@@ -195,27 +209,29 @@ function TaskRowNode({
           <span className="container-label">Group</span>
         </div>
       ) : (
-        <div className="assignee-select-wrapper">
-          <div className="avatar-circle" style={{ backgroundColor: getAvatarColor(task.assignee) }}>
-            {getInitials(task.assignee)}
-          </div>
-          <select className="assignee-select" value={task.assignee || 'Unassigned'} onChange={handleAssigneeChange}>
-            <option value="Unassigned">Unassigned</option>
-            {assignees.map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }} onClick={(event) => event.stopPropagation()}>
+          <CustomDropdown
+            value={task.assignee || 'Unassigned'}
+            onChange={handleAssigneeChange}
+            options={['Unassigned', ...assignees]}
+            style={{ width: '140px' }}
+          />
         </div>
       )}
     </div>
   );
 
+  const isUnassigned = !task.assignee || task.assignee === 'Unassigned';
   const statusBlock = (
     <div className="card-col-status">
       <span
         className={`status-badge ${effectiveStatus.toLowerCase().replace(/\s+/g, '')}`}
-        onClick={isParentTask ? undefined : cycleStatus}
-        style={{ cursor: isParentTask ? 'default' : 'pointer' }}
+        onClick={(isRootParent || isUnassigned) ? undefined : cycleStatus}
+        style={{ 
+          cursor: isRootParent ? 'default' : (isUnassigned ? 'not-allowed' : 'pointer'),
+          opacity: isUnassigned && !isRootParent ? 0.65 : 1
+        }}
+        title={isUnassigned && !isRootParent ? "Assign a person to change status" : ""}
       >
         {effectiveStatus}
       </span>
@@ -225,9 +241,15 @@ function TaskRowNode({
   const actionButtons = (
     <div className="card-col-actions">
       <div className="hover-actions-group">
-        <button className="action-btn-circle" onClick={() => onAddSubtaskClick(task.id, task.title)}>Add</button>
-        <button className="action-btn-circle" onClick={() => onOpenEditTask(task)}>Edit</button>
-        <button className="action-btn-circle delete" onClick={() => onDeleteTask(task.id)}>Delete</button>
+        <button className="action-btn-circle add" onClick={() => onAddSubtaskClick(task.id, task.title)} title="Add Subtask">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <button className="action-btn-circle edit" onClick={() => onOpenEditTask(task)} title="Edit Task">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+        <button className="action-btn-circle delete" onClick={() => onDeleteTask(task.id)} title="Delete Task">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+        </button>
       </div>
     </div>
   );
@@ -239,6 +261,11 @@ function TaskRowNode({
           {dateBlock}
           <div className="card-col-title">
             <div style={{ width: '100%' }}>
+              {task.parentPath && task.parentPath.length > 0 && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>
+                  {task.parentPath.join(' › ')}
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 {isParentTask ? (
                   <button type="button" onClick={toggleExpanded} className="chevron-toggle">
@@ -282,6 +309,7 @@ function TaskRowNode({
                 onAddSubtaskClick={onAddSubtaskClick}
                 searchActive={searchActive}
                 todayDate={todayDate}
+                filterAssignee={filterAssignee}
               />
             ))}
           </div>
@@ -341,6 +369,7 @@ function TaskRowNode({
               onAddSubtaskClick={onAddSubtaskClick}
               searchActive={searchActive}
               todayDate={todayDate}
+              filterAssignee={filterAssignee}
             />
           ))}
         </div>
@@ -355,6 +384,7 @@ export default function TaskList({
   onUpdateTask,
   onDeleteTask,
   onOpenEditTask,
+  onOpenCreateTask,
   onAddSubtaskClick,
   viewMode,
   selectedAssigneeFilter,
@@ -371,9 +401,7 @@ export default function TaskList({
   }, [selectedAssigneeFilter]);
 
   const getFilteredTree = (list) => list.map((task) => {
-    const matchesAssignee = filterAssignee === 'all'
-      || task.assignee === filterAssignee
-      || getSubtaskAssigneesRecursive(task).includes(filterAssignee);
+    const matchesAssignee = filterAssignee === 'all' || task.assignee === filterAssignee;
 
     const matchesStatus = filterStatus === 'all' || getEffectiveStatus(task) === filterStatus;
 
@@ -390,15 +418,51 @@ export default function TaskList({
     if (matchesSelf || childMatches.length > 0) {
       return {
         ...task,
-        subtasks: matchesSelf && task.subtasks?.length ? task.subtasks : childMatches,
+        subtasks: childMatches,
       };
     }
 
     return null;
   }).filter(Boolean);
 
+  const getFlatFilteredList = (list) => {
+    const flat = [];
+    const walk = (nodes, parentPath = []) => {
+      nodes.forEach((task) => {
+        const isLeaf = !task.subtasks || task.subtasks.length === 0;
+
+        const matchesAssignee = filterAssignee === 'all' || task.assignee === filterAssignee;
+        const matchesStatus = filterStatus === 'all' || getEffectiveStatus(task) === filterStatus;
+
+        let matchesView = true;
+        if (viewMode === 'today') {
+          matchesView = task.dueDate === todayDate && getEffectiveStatus(task) !== 'Complete';
+        } else if (viewMode === 'completed') {
+          matchesView = getEffectiveStatus(task) === 'Complete';
+        }
+
+        const currentPath = [...parentPath, task.title];
+
+        if (isLeaf && matchesAssignee && matchesStatus && matchesView) {
+          flat.push({
+            ...task,
+            parentPath: parentPath,
+            subtasks: [],
+          });
+        }
+
+        if (task.subtasks?.length) {
+          walk(task.subtasks, currentPath);
+        }
+      });
+    };
+    walk(list);
+    return flat;
+  };
+
   const filteredTree = getFilteredTree(tasks);
-  const searchActive = filterAssignee !== 'all' || filterStatus !== 'all';
+  const searchActive = filterAssignee !== 'all' || filterStatus !== 'all' || viewMode !== 'all';
+  const displayTree = filteredTree;
 
   const titleMap = {
     today: 'Today Tasks',
@@ -408,14 +472,15 @@ export default function TaskList({
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="page-title-sec">
           <h2>{titleMap[viewMode]}</h2>
         </div>
 
         {selectedAssigneeFilter && selectedAssigneeFilter !== 'all' && (
           <button
-            className="nav-link-btn nav-link-cta"
+            className="nav-link-btn"
+            style={{ padding: '0.55rem 1.2rem', borderRadius: '12px', fontSize: '0.82rem', border: '1px solid var(--line)', background: 'transparent' }}
             onClick={() => {
               setFilterAssignee('all');
               onResetAssigneeFilter();
@@ -428,36 +493,40 @@ export default function TaskList({
 
       <div className="table-header-row">
         <div className="card-col-date">Date</div>
-        <div className="card-col-title">Task</div>
+        <div className="card-col-title" style={{ textAlign: 'center' }}>Task</div>
         <div className="card-col-assignee">
-          <select
-            className="filter-select"
+          <CustomDropdown
             value={filterAssignee}
             onChange={(event) => {
               setFilterAssignee(event.target.value);
               if (onResetAssigneeFilter) onResetAssigneeFilter();
             }}
-          >
-            <option value="all">All Assignees</option>
-            <option value="Unassigned">Unassigned</option>
-            {assignees.map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
+            options={[
+              { value: 'all', label: 'All Assignees' },
+              { value: 'Unassigned', label: 'Unassigned' },
+              ...assignees.map((name) => ({ value: name, label: name }))
+            ]}
+            style={{ width: 'calc(100% - 24px)', margin: '0 auto' }}
+          />
         </div>
         <div className="card-col-status">
-          <select className="filter-select" value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)}>
-            <option value="all">All Statuses</option>
-            <option value="Pending">Pending</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Complete">Complete</option>
-          </select>
+          <CustomDropdown
+            value={filterStatus}
+            onChange={(event) => setFilterStatus(event.target.value)}
+            options={[
+              { value: 'all', label: 'All Statuses' },
+              { value: 'Pending', label: 'Pending' },
+              { value: 'In Progress', label: 'In Progress' },
+              { value: 'Complete', label: 'Complete' }
+            ]}
+            style={{ width: 'calc(100% - 24px)', margin: '0 auto' }}
+          />
         </div>
-        <div className="card-col-actions">Actions</div>
+        <div className="card-col-actions" style={{ justifyContent: 'center' }}>Actions</div>
       </div>
 
       <div className="cards-stack">
-        {filteredTree.length > 0 ? filteredTree.map((task) => (
+        {displayTree.length > 0 ? displayTree.map((task) => (
           <TaskRowNode
             key={task.id}
             task={task}
@@ -469,6 +538,7 @@ export default function TaskList({
             onAddSubtaskClick={onAddSubtaskClick}
             searchActive={searchActive}
             todayDate={todayDate}
+            filterAssignee={filterAssignee}
           />
         )) : (
           <div className="empty-state-card">

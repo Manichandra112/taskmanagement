@@ -135,30 +135,12 @@ export default function Dashboard({ tasks, assignees }) {
 
         <article className="dashboard-card summary-card">
           <div className="dashboard-card-head compact">
-            <div>
+            {/* <div>
               <span className="section-tag">Delivery health</span>
               <h3>Workload snapshot</h3>
-            </div>
+            </div> */}
           </div>
 
-          <div className="summary-grid">
-            <div>
-              <span>Due today</span>
-              <strong>{stats.dueToday}</strong>
-            </div>
-            <div>
-              <span>Assignees</span>
-              <strong>{activeAssignees}</strong>
-            </div>
-            <div>
-              <span>Parent groups</span>
-              <strong>{tasks.length}</strong>
-            </div>
-            <div>
-              <span>All rows</span>
-              <strong>{allTasks.length}</strong>
-            </div>
-          </div>
 
           <div className="recent-win-wrap">
             <div className="mini-heading">Recent completions</div>

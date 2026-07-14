@@ -1,9 +1,10 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
 import TaskList from './components/TaskList';
 import AssigneeList from './components/AssigneeList';
 import ApiConverterView from './components/ApiConverterView';
+import CustomDropdown from './components/CustomDropdown';
 
 const API_BASE = 'http://localhost:5000/api';
 
@@ -44,6 +45,8 @@ export default function App() {
   const [modalAssignee, setModalAssignee] = useState('Unassigned');
   const [modalDescription, setModalDescription] = useState('');
   const [modalDueDate, setModalDueDate] = useState(getTodayDate());
+  const [isAddingNewAssignee, setIsAddingNewAssignee] = useState(false);
+  const [newAssigneeInput, setNewAssigneeInput] = useState('');
 
   const todayDate = getTodayDate();
 
@@ -73,9 +76,7 @@ export default function App() {
         setLoadError('Could not reach the backend. Make sure the API is running on port 5000.');
       }
     } finally {
-      if (!signal?.aborted) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     }
   };
 
@@ -92,6 +93,8 @@ export default function App() {
     setModalAssignee('Unassigned');
     setModalDescription('');
     setModalDueDate(todayDate);
+    setIsAddingNewAssignee(false);
+    setNewAssigneeInput('');
   };
 
   const closeModal = () => {
@@ -121,8 +124,10 @@ export default function App() {
     setIsModalOpen(true);
   };
 
-  const refreshData = async () => {
-    setIsLoading(true);
+  const refreshData = async (showLoading = false) => {
+    if (showLoading) {
+      setIsLoading(true);
+    }
     await fetchTasksAndAssignees();
   };
 
@@ -135,13 +140,32 @@ export default function App() {
     }
 
     try {
+      let finalAssignee = modalAssignee;
+      if (isAddingNewAssignee) {
+        const trimmedName = newAssigneeInput.trim();
+        if (!trimmedName) {
+          alert('Please enter a name for the new assignee.');
+          return;
+        }
+        if (assignees.includes(trimmedName)) {
+          finalAssignee = trimmedName;
+        } else {
+          await fetch(`${API_BASE}/assignees`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: trimmedName }),
+          });
+          finalAssignee = trimmedName;
+        }
+      }
+
       if (editingTask) {
         await fetch(`${API_BASE}/tasks/${editingTask.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: modalDescription.trim(),
-            assignee: modalAssignee,
+            assignee: finalAssignee,
             dueDate: modalDueDate,
           }),
         });
@@ -155,12 +179,12 @@ export default function App() {
             title: modalDescription.trim(),
             dueDate: modalDueDate,
             status: 'Pending',
-            assignee: modalAssignee,
+            assignee: finalAssignee,
           }),
         });
       }
 
-      await refreshData();
+      await refreshData(false);
       closeModal();
     } catch (error) {
       console.error('Error submitting task form:', error);
@@ -174,7 +198,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedFields),
       });
-      await refreshData();
+      await refreshData(false);
     } catch (error) {
       console.error('Error updating task:', error);
     }
@@ -187,7 +211,7 @@ export default function App() {
 
     try {
       await fetch(`${API_BASE}/tasks/${taskId}`, { method: 'DELETE' });
-      await refreshData();
+      await refreshData(false);
     } catch (error) {
       console.error('Error deleting task:', error);
     }
@@ -226,7 +250,7 @@ export default function App() {
       for (const task of newTasks) {
         await uploadTask(task);
       }
-      await refreshData();
+      await refreshData(false);
     } catch (error) {
       console.error('Error importing tasks:', error);
     }
@@ -244,9 +268,30 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
-      await refreshData();
+      await refreshData(false);
     } catch (error) {
       console.error('Error creating assignee:', error);
+    }
+  };
+
+  const handleRenameAssignee = async (oldName, newName) => {
+    if (!newName || !newName.trim()) return;
+    if (assignees.includes(newName.trim()) && newName.trim() !== oldName) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/assignees/${encodeURIComponent(oldName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newName: newName.trim() }),
+      });
+      if (!res.ok) {
+        throw new Error('Failed to rename assignee');
+      }
+      await refreshData(false);
+    } catch (error) {
+      console.error('Error renaming assignee:', error);
     }
   };
 
@@ -272,7 +317,7 @@ export default function App() {
         <section className="empty-state-card error">
           <div className="empty-state-title">Connection issue</div>
           <p>{loadError}</p>
-          <button className="nav-link-btn nav-link-cta" onClick={() => refreshData()}>
+          <button className="nav-link-btn nav-link-cta" onClick={() => refreshData(true)}>
             Retry
           </button>
         </section>
@@ -291,6 +336,7 @@ export default function App() {
           onUpdateTask={handleUpdateTaskField}
           onDeleteTask={handleDeleteTask}
           onOpenEditTask={handleOpenEditModal}
+          onOpenCreateTask={handleOpenCreateModal}
           onAddSubtaskClick={handleOpenSubtaskModal}
           viewMode="today"
         />
@@ -305,6 +351,7 @@ export default function App() {
           onUpdateTask={handleUpdateTaskField}
           onDeleteTask={handleDeleteTask}
           onOpenEditTask={handleOpenEditModal}
+          onOpenCreateTask={handleOpenCreateModal}
           onAddSubtaskClick={handleOpenSubtaskModal}
           viewMode="all"
           selectedAssigneeFilter={selectedAssigneeFilter}
@@ -321,6 +368,7 @@ export default function App() {
           onUpdateTask={handleUpdateTaskField}
           onDeleteTask={handleDeleteTask}
           onOpenEditTask={handleOpenEditModal}
+          onOpenCreateTask={handleOpenCreateModal}
           onAddSubtaskClick={handleOpenSubtaskModal}
           viewMode="completed"
         />
@@ -337,6 +385,7 @@ export default function App() {
             setActiveView('all');
           }}
           onAddAssignee={handleAddAssignee}
+          onRenameAssignee={handleRenameAssignee}
         />
       );
     }
@@ -359,45 +408,114 @@ export default function App() {
 
       {isModalOpen && (
         <div className="modal-overlay-bg" onClick={closeModal}>
-          <div className="mockup-modal" onClick={(event) => event.stopPropagation()}>
-            <button className="mockup-modal-close" onClick={closeModal}>
-              x
-            </button>
-            <h3 className="mockup-modal-title">
-              {editingTask ? 'Edit Task' : parentTaskId ? 'Add Subtask' : 'Create Task'}
-            </h3>
+          <div className="mockup-modal" onClick={(event) => event.stopPropagation()} style={{ width: 'min(500px, 100%)', padding: '1.8rem' }}>
+            <button className="mockup-modal-close" onClick={closeModal}>×</button>
+            
+            <div className="card-header" style={{ borderBottom: 'none', padding: 0, marginBottom: '1.2rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>
+                {editingTask ? 'Edit Task' : parentTaskId ? 'Add Subtask' : 'Create Task'}
+              </h3>
+              <p style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                {editingTask ? 'Modify the selected task properties.' : parentTaskId ? 'Create a nested subtask under the parent.' : 'Create a top-level task to start tracking.'}
+              </p>
+            </div>
 
             {parentTaskTitle && (
-              <div className="modal-parent-note">
-                Parent task: <strong>{parentTaskTitle}</strong>
+              <div className="modal-parent-note" style={{ padding: '0.65rem 0.85rem', fontSize: '0.85rem', marginBottom: '1.2rem' }}>
+                Parent: <strong>{parentTaskTitle}</strong>
               </div>
             )}
 
-            <form onSubmit={handleModalSubmit}>
-              {editingTask?.subtasks?.length ? (
-                <div className="modal-info-note">This parent task is managed by its subtasks.</div>
+            <form onSubmit={handleModalSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              {editingTask?.parent_id === null && editingTask?.subtasks?.length ? (
+                <div>
+                  <div className="modal-info-note" style={{ padding: '0.65rem 0.85rem', fontSize: '0.82rem', marginBottom: '1.2rem' }}>
+                    This parent task's status and progress are calculated automatically from its subtasks.
+                  </div>
+                  <div className="mockup-form-group">
+                    <label className="field-label" htmlFor="task-date">Date</label>
+                    <input
+                      id="task-date"
+                      type="date"
+                      className="mockup-select"
+                      required
+                      value={modalDueDate}
+                      onChange={(event) => setModalDueDate(event.target.value)}
+                    />
+                  </div>
+                </div>
               ) : (
-                <div className="mockup-form-group">
-                  <label className="field-label" htmlFor="assignee-select">Assignee</label>
-                  <select
-                    id="assignee-select"
-                    className="mockup-select"
-                    value={modalAssignee}
-                    onChange={(event) => setModalAssignee(event.target.value)}
-                  >
-                    <option value="Unassigned">Unassigned</option>
-                    {assignees.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="mockup-form-group" style={{ marginBottom: 0 }}>
+                    <label className="field-label" htmlFor="assignee-select">Assignee</label>
+                    <CustomDropdown
+                      value={isAddingNewAssignee ? '_new_' : modalAssignee}
+                      onChange={(event) => {
+                        const val = event.target.value;
+                        if (val === '_new_') {
+                          setIsAddingNewAssignee(true);
+                        } else {
+                          setIsAddingNewAssignee(false);
+                          setModalAssignee(val);
+                        }
+                      }}
+                      options={[
+                        { value: 'Unassigned', label: 'Unassigned' },
+                        ...assignees.map((name) => ({ value: name, label: name })),
+                        { value: '_new_', label: '+ Add New Assignee...', special: true }
+                      ]}
+                    />
+                  </div>
+
+                  <div className="mockup-form-group" style={{ marginBottom: 0 }}>
+                    <label className="field-label" htmlFor="task-date">Date</label>
+                    <input
+                      id="task-date"
+                      type="date"
+                      className="mockup-select"
+                      required
+                      value={modalDueDate}
+                      onChange={(event) => setModalDueDate(event.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {isAddingNewAssignee && !(editingTask?.parent_id === null && editingTask?.subtasks?.length) && (
+                <div className="mockup-form-group" style={{ border: '1px solid var(--line-strong)', borderRadius: '14px', padding: '0.8rem', background: 'rgba(201, 108, 80, 0.03)', marginBottom: 0 }}>
+                  <label className="field-label" style={{ color: 'var(--accent)' }}>New Assignee Name</label>
+                  <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type="text"
+                      placeholder="e.g. Alice Smith"
+                      className="mockup-select"
+                      style={{ flex: 1, background: '#fff' }}
+                      value={newAssigneeInput}
+                      onChange={(event) => setNewAssigneeInput(event.target.value)}
+                      required
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="nav-link-btn"
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.78rem', background: 'rgba(33, 53, 71, 0.06)', color: 'var(--text)' }}
+                      onClick={() => {
+                        setIsAddingNewAssignee(false);
+                        setNewAssigneeInput('');
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               )}
 
               <div className="mockup-form-group">
-                <label className="field-label" htmlFor="task-description">Task details</label>
+                <label className="field-label" htmlFor="task-description">Task Details</label>
                 <textarea
                   id="task-description"
                   className="mockup-textarea"
+                  style={{ minHeight: '80px' }}
                   placeholder="Describe the task clearly"
                   required
                   value={modalDescription}
@@ -405,21 +523,19 @@ export default function App() {
                 />
               </div>
 
-              <div className="mockup-form-group">
-                <label className="field-label" htmlFor="task-date">Due date</label>
-                <input
-                  id="task-date"
-                  type="date"
-                  className="mockup-select"
-                  required
-                  value={modalDueDate}
-                  onChange={(event) => setModalDueDate(event.target.value)}
-                />
+              <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.4rem' }}>
+                <button
+                  type="button"
+                  className="nav-link-btn"
+                  style={{ flex: 1, justifyContent: 'center', background: 'rgba(33, 53, 71, 0.06)', color: 'var(--text)' }}
+                  onClick={closeModal}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="nav-link-btn nav-link-cta" style={{ flex: 1.5, justifyContent: 'center' }}>
+                  {editingTask ? 'Save Changes' : 'Create Task'}
+                </button>
               </div>
-
-              <button type="submit" className="mockup-btn-create">
-                {editingTask ? 'Save changes' : 'Create task'}
-              </button>
             </form>
           </div>
         </div>
