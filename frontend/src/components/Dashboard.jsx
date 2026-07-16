@@ -18,6 +18,10 @@ const getLeafTasks = (list) => flattenTasks(list).filter(
   (task) => !task.subtasks || task.subtasks.length === 0,
 );
 
+const isRootParentTask = (task) => (
+  (task.parent_id === null || task.parent_id === undefined) && task.subtasks?.length > 0
+);
+
 const formatStatusClass = (status) => status.toLowerCase().replace(/\s+/g, '');
 
 const getTodayDate = () => {
@@ -47,6 +51,7 @@ const getAssigneeLabel = (task) => task.assignee && task.assignee !== 'Unallocat
 
 export default function Dashboard({ tasks, assignees }) {
   const allTasks = flattenTasks(tasks);
+  const assignableTasks = allTasks.filter((task) => !isRootParentTask(task));
   const leafTasks = getLeafTasks(tasks);
   const todayDate = getTodayDate();
 
@@ -67,7 +72,7 @@ export default function Dashboard({ tasks, assignees }) {
     ? Math.round((stats.complete / leafTasks.length) * 100)
     : 0;
 
-  const activeAssignees = assignees.filter((name) => name !== 'Unallocated').length;
+  const totalAssignableTasks = assignableTasks.length;
 
   const focusTasks = [...leafTasks]
     .filter((task) => task.status !== 'Complete')
@@ -82,11 +87,11 @@ export default function Dashboard({ tasks, assignees }) {
     .sort((a, b) => b.dueDate.localeCompare(a.dueDate) || a.title.localeCompare(b.title))
     .slice(0, 4);
 
-  const assigned   = leafTasks.filter((t) => t.assignee && t.assignee !== 'Unallocated').length;
-  const unassigned = leafTasks.filter((t) => !t.assignee || t.assignee === 'Unallocated').length;
+  const assigned = assignableTasks.filter((task) => task.assignee && task.assignee !== 'Unallocated').length;
+  const unassigned = assignableTasks.filter((task) => !task.assignee || task.assignee === 'Unallocated').length;
 
   const summaryMetrics = [
-    { label: 'Total Tasks',  value: leafTasks.length, note: 'All actionable items',    tone: 'total' },
+    { label: 'Total Tasks',  value: totalAssignableTasks, note: 'Tasks that can be assigned to members', tone: 'total' },
     { label: 'Assigned',     value: assigned,          note: 'Have an owner',           tone: 'assigned' },
     { label: 'Unassigned',   value: unassigned,        note: 'Need to be allocated',    tone: 'unassigned' },
     { label: 'In Progress',  value: stats.inProgress,  note: 'Currently being worked',  tone: 'inprogress' },
@@ -165,3 +170,5 @@ export default function Dashboard({ tasks, assignees }) {
     </div>
   );
 }
+
+
