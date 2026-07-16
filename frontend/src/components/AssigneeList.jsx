@@ -14,6 +14,9 @@ const flattenTasks = (list) => {
   return flat;
 };
 
+const isRootParentTask = (task) =>
+  (task.parent_id === null || task.parent_id === undefined) && task.subtasks?.length > 0;
+
 export default function AssigneeList({
   assigneeProfiles,
   tasks,
@@ -23,6 +26,7 @@ export default function AssigneeList({
   isAdmin,
 }) {
   const allTasks = flattenTasks(tasks);
+  const assignableTasks = allTasks.filter((task) => !isRootParentTask(task));
   const [newAssigneeName, setNewAssigneeName] = useState('');
   const [newAssigneeEmail, setNewAssigneeEmail] = useState('');
   const [newAssigneePassword, setNewAssigneePassword] = useState('');
@@ -98,7 +102,10 @@ export default function AssigneeList({
   return (
     <div>
       <div className="compact-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', padding: '0.2rem 0.5rem' }}>
-        <span className="compact-label" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text)', textTransform: 'none', letterSpacing: 'normal' }}>Assignees</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+          <span className="compact-label" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text)', textTransform: 'none', letterSpacing: 'normal' }}>Assignees</span>
+          
+        </div>
         {isAdmin && (
           <button
             className="nav-link-btn nav-link-cta"
@@ -122,15 +129,15 @@ export default function AssigneeList({
               <th style={{ width: '80px', textAlign: 'center' }}>No</th>
               <th style={{ textAlign: 'center' }}>Name</th>
               <th style={{ textAlign: 'center' }}>Email</th>
-              <th style={{ textAlign: 'center' }}>Active</th>
-              <th style={{ textAlign: 'center' }}>Done</th>
+              <th style={{ textAlign: 'center' }}>Open Tasks</th>
+              <th style={{ textAlign: 'center' }}>Completed Tasks</th>
               <th style={{ width: '120px', textAlign: 'center' }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {assigneeProfiles.map((profile, index) => {
-              const pendingCount = allTasks.filter((task) => task.assignee === profile.name && task.status !== 'Complete').length;
-              const completedCount = allTasks.filter((task) => task.assignee === profile.name && task.status === 'Complete').length;
+              const openCount = assignableTasks.filter((task) => task.assignee === profile.name && task.status !== 'Complete').length;
+              const completedCount = assignableTasks.filter((task) => task.assignee === profile.name && task.status === 'Complete').length;
 
               return (
                 <tr key={profile.name} className="hoverable">
@@ -139,12 +146,12 @@ export default function AssigneeList({
                   <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--muted)' }}>{profile.email || '-'}</td>
                   <td style={{ textAlign: 'center' }}>
                     <span className="status-badge pending team-count-badge" style={{ cursor: 'default' }}>
-                      {pendingCount} Active
+                      {openCount} Open
                     </span>
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     <span className="status-badge complete team-count-badge" style={{ cursor: 'default' }}>
-                      {completedCount} Done
+                      {completedCount} Completed
                     </span>
                   </td>
                   <td style={{ textAlign: 'center' }}>
@@ -248,5 +255,3 @@ export default function AssigneeList({
     </div>
   );
 }
-
-

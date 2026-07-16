@@ -22,6 +22,21 @@ const isRootParentTask = (task) => (
   (task.parent_id === null || task.parent_id === undefined) && task.subtasks?.length > 0
 );
 
+const getEffectiveStatus = (task) => {
+  if (task.parent_id !== null && task.parent_id !== undefined) {
+    return task.status;
+  }
+
+  if (!task.subtasks || task.subtasks.length === 0) {
+    return task.status;
+  }
+
+  const childStatuses = task.subtasks.map(getEffectiveStatus);
+  if (childStatuses.every((status) => status === 'Complete')) return 'Complete';
+  if (childStatuses.some((status) => status === 'In Progress' || status === 'Complete')) return 'In Progress';
+  return 'Pending';
+};
+
 const formatStatusClass = (status) => status.toLowerCase().replace(/\s+/g, '');
 
 const getTodayDate = () => {
@@ -49,17 +64,17 @@ const getAssigneeLabel = (task) => task.assignee && task.assignee !== 'Unallocat
   ? task.assignee
   : 'Unallocated';
 
-export default function Dashboard({ tasks, assignees }) {
+export default function Dashboard({ tasks }) {
   const allTasks = flattenTasks(tasks);
   const assignableTasks = allTasks.filter((task) => !isRootParentTask(task));
-  const leafTasks = getLeafTasks(tasks);
   const todayDate = getTodayDate();
 
-  const stats = leafTasks.reduce((acc, task) => {
-    if (task.status === 'Pending') acc.pending += 1;
-    if (task.status === 'In Progress') acc.inProgress += 1;
-    if (task.status === 'Complete') acc.complete += 1;
-    if (task.status !== 'Complete' && task.dueDate === todayDate) acc.dueToday += 1;
+  const stats = assignableTasks.reduce((acc, task) => {
+    const effectiveStatus = getEffectiveStatus(task);
+    if (effectiveStatus === 'Pending') acc.pending += 1;
+    if (effectiveStatus === 'In Progress') acc.inProgress += 1;
+    if (effectiveStatus === 'Complete') acc.complete += 1;
+    if (effectiveStatus !== 'Complete' && task.dueDate === todayDate) acc.dueToday += 1;
     return acc;
   }, {
     pending: 0,
@@ -68,22 +83,22 @@ export default function Dashboard({ tasks, assignees }) {
     dueToday: 0,
   });
 
-  const completionRate = leafTasks.length > 0
-    ? Math.round((stats.complete / leafTasks.length) * 100)
+  const completionRate = assignableTasks.length > 0
+    ? Math.round((stats.complete / assignableTasks.length) * 100)
     : 0;
 
   const totalAssignableTasks = assignableTasks.length;
 
-  const focusTasks = [...leafTasks]
-    .filter((task) => task.status !== 'Complete')
+  const focusTasks = [...assignableTasks]
+    .filter((task) => getEffectiveStatus(task) !== 'Complete')
     .sort((a, b) => {
       if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
       return a.title.localeCompare(b.title);
     })
     .slice(0, 5);
 
-  const recentWins = [...leafTasks]
-    .filter((task) => task.status === 'Complete')
+  const recentWins = [...assignableTasks]
+    .filter((task) => getEffectiveStatus(task) === 'Complete')
     .sort((a, b) => b.dueDate.localeCompare(a.dueDate) || a.title.localeCompare(b.title))
     .slice(0, 4);
 
@@ -94,6 +109,7 @@ export default function Dashboard({ tasks, assignees }) {
     { label: 'Total Tasks',  value: totalAssignableTasks, note: 'Tasks that can be assigned to members', tone: 'total' },
     { label: 'Assigned',     value: assigned,          note: 'Have an owner',           tone: 'assigned' },
     { label: 'Unassigned',   value: unassigned,        note: 'Need to be allocated',    tone: 'unassigned' },
+    { label: 'Pending',      value: stats.pending,     note: 'Waiting to be started',   tone: 'pending' },
     { label: 'In Progress',  value: stats.inProgress,  note: 'Currently being worked',  tone: 'inprogress' },
     { label: 'Completed',    value: stats.complete,    note: `${completionRate}% done`, tone: 'complete' },
   ];
@@ -170,5 +186,8 @@ export default function Dashboard({ tasks, assignees }) {
     </div>
   );
 }
+
+
+
 
 
