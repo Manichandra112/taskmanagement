@@ -52,7 +52,6 @@ const NAV_ITEMS = [
 ];
 
 export default function Navbar({ activeView, setActiveView, onOpenAddTaskModal, openTasks, onLogout, userRole, userName }) {
-  // Sync URL hash to active view
   useEffect(() => {
     const hash = window.location.hash.replace('#', '') || 'dashboard';
     const validKeys = NAV_ITEMS.map(i => i.key);
@@ -66,7 +65,6 @@ export default function Navbar({ activeView, setActiveView, onOpenAddTaskModal, 
     window.location.hash = key;
   };
 
-  // Also react to browser back/forward
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '') || 'dashboard';
@@ -85,17 +83,11 @@ export default function Navbar({ activeView, setActiveView, onOpenAddTaskModal, 
 
   return (
     <header className="navbar-header" role="banner">
-      {/* Brand */}
-      <div className="nb-brand">
-        <div className="nb-logo">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-          </svg>
-        </div>
+      <div className="nb-brand" aria-label="TaskManagement">
+        <span className="nb-brand-chip">GHL</span>
         <span className="nb-brand-name">TaskManagement</span>
       </div>
 
-      {/* Navigation tabs */}
       <nav className="nb-nav" aria-label="Primary navigation">
         {NAV_ITEMS.map((item) => (
           <button
@@ -111,7 +103,6 @@ export default function Navbar({ activeView, setActiveView, onOpenAddTaskModal, 
         ))}
       </nav>
 
-      {/* Right actions */}
       <div className="nb-actions">
         {userRole === 'admin' && (
           <button className="nb-cta" onClick={onOpenAddTaskModal} aria-label="Create new task">
@@ -122,7 +113,6 @@ export default function Navbar({ activeView, setActiveView, onOpenAddTaskModal, 
           </button>
         )}
 
-        {/* User avatar */}
         <div className="nb-user" title={userName || userRole}>
           <div className="nb-avatar">{initials}</div>
           <div className="nb-user-info">
@@ -143,3 +133,4 @@ export default function Navbar({ activeView, setActiveView, onOpenAddTaskModal, 
     </header>
   );
 }
+

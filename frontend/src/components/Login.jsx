@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 function EmailIcon() {
   return (
@@ -40,6 +40,19 @@ export default function Login({ onLoginSuccess, onNotify }) {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [allowManualEntry, setAllowManualEntry] = useState(false);
+
+  useEffect(() => {
+    setEmail('');
+    setPassword('');
+    setShowPassword(false);
+  }, []);
+
+  const enableManualEntry = () => {
+    if (!allowManualEntry) {
+      setAllowManualEntry(true);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -84,9 +97,8 @@ export default function Login({ onLoginSuccess, onNotify }) {
 
       <div className="login-card-glass">
         <div className="login-brand">
-          <div className="brand-logo-glow">TF</div>
-          <h2>TaskFlow</h2>
-          <p>Login</p>
+          <div className="brand-logo-glow ghl-brand-mark">GHL</div>
+          <h2>Task Management</h2>
         </div>
 
         {error && (
@@ -96,15 +108,19 @@ export default function Login({ onLoginSuccess, onNotify }) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="login-form">
+        <form onSubmit={handleSubmit} className="login-form" autoComplete="off">
           <div className="login-form-group">
             <label htmlFor="email">Email</label>
             <div className="input-with-icon">
               <span className="input-icon"><EmailIcon /></span>
               <input
                 id="email"
+                name="login-email"
                 type="email"
                 autoComplete="off"
+                readOnly={!allowManualEntry}
+                onFocus={enableManualEntry}
+                onMouseDown={enableManualEntry}
                 required
                 disabled={isLoading}
                 placeholder="Email address"
@@ -120,8 +136,12 @@ export default function Login({ onLoginSuccess, onNotify }) {
               <span className="input-icon"><LockIcon /></span>
               <input
                 id="password"
+                name="login-password"
                 type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
+                autoComplete="new-password"
+                readOnly={!allowManualEntry}
+                onFocus={enableManualEntry}
+                onMouseDown={enableManualEntry}
                 required
                 disabled={isLoading}
                 placeholder="Password"
