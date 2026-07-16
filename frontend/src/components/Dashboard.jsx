@@ -41,9 +41,9 @@ const getTaskHealth = (task, todayDate) => {
   return 'Upcoming';
 };
 
-const getAssigneeLabel = (task) => task.assignee && task.assignee !== 'Unassigned'
+const getAssigneeLabel = (task) => task.assignee && task.assignee !== 'Unallocated'
   ? task.assignee
-  : 'Unassigned';
+  : 'Unallocated';
 
 export default function Dashboard({ tasks, assignees }) {
   const allTasks = flattenTasks(tasks);
@@ -67,7 +67,7 @@ export default function Dashboard({ tasks, assignees }) {
     ? Math.round((stats.complete / leafTasks.length) * 100)
     : 0;
 
-  const activeAssignees = assignees.filter((name) => name !== 'Unassigned').length;
+  const activeAssignees = assignees.filter((name) => name !== 'Unallocated').length;
 
   const focusTasks = [...leafTasks]
     .filter((task) => task.status !== 'Complete')

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { convertPersonWiseToTaskWise, convertTaskWiseToPersonWise } from '../utils/apiConverter';
 
-export default function ApiConverterView({ tasks, onImportTasks }) {
+export default function ApiConverterView({ tasks, onImportTasks, onNotify }) {
   const sampleLegacyData = {
     'AAA - Today works': [
       { date: '2026-04-07', description: 'Trichy land agreement to Rajkumar', status: 'Complete' },
@@ -45,9 +45,10 @@ export default function ApiConverterView({ tasks, onImportTasks }) {
         return;
       }
       onImportTasks(parsed);
-      alert(`Imported ${parsed.length} tasks.`);
+      onNotify?.({ type: 'success', title: 'Tasks Imported', message: `${parsed.length} tasks imported successfully.` });
     } catch (error) {
       setErrorMsg(`Import failed: ${error.message}`);
+      onNotify?.({ type: 'warning', title: 'Import Failed', message: error.message });
     }
   };
 

@@ -62,7 +62,7 @@ export function convertTaskWiseToPersonWise(tasks) {
   // Recursive function to flatten all nested subtasks
   const flattenAndGroup = (list) => {
     list.forEach(task => {
-      const person = task.assignee || 'Unassigned';
+      const person = task.assignee || 'Unallocated';
       if (!personWise[person]) {
         personWise[person] = [];
       }

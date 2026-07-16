@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-export default function CustomDropdown({ value, onChange, options, style, className, triggerStyle }) {
+export default function CustomDropdown({ value, onChange, options, style, className, triggerStyle, disabled, menuPlacement = 'down' }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -27,25 +27,28 @@ export default function CustomDropdown({ value, onChange, options, style, classN
     setIsOpen(false);
   };
 
+
   return (
     <div
-      className={`custom-dropdown-container ${className || ''}`}
+      className={`custom-dropdown-container ${isOpen ? 'open' : ''} ${className || ''}`.trim()}
       ref={dropdownRef}
-      style={{ position: 'relative', ...style }}
+      style={{ position: 'relative', zIndex: isOpen ? 30 : undefined, ...style }}
     >
       <button
         type="button"
         className="custom-dropdown-trigger"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           width: '100%',
           textAlign: 'left',
-          cursor: 'pointer',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.75 : 1,
           ...triggerStyle
         }}
+        disabled={disabled}
       >
         <span>{displayLabel}</span>
         <svg
@@ -71,7 +74,7 @@ export default function CustomDropdown({ value, onChange, options, style, classN
       </button>
 
       {isOpen && (
-        <ul className="custom-dropdown-menu">
+        <ul className={`custom-dropdown-menu ${menuPlacement === 'up' ? 'open-up' : ''}`.trim()}>
           {options.map((opt, idx) => {
             const val = typeof opt === 'object' ? opt.value : opt;
             const label = typeof opt === 'object' ? opt.label : opt;

@@ -14,66 +14,105 @@ const flattenTasks = (list) => {
   return flat;
 };
 
-export default function AssigneeList({ assignees, tasks, onSelectAssignee, onAddAssignee, onRenameAssignee }) {
+export default function AssigneeList({
+  assigneeProfiles,
+  tasks,
+  onSelectAssignee,
+  onAddAssignee,
+  onUpdateAssignee,
+  isAdmin,
+}) {
   const allTasks = flattenTasks(tasks);
   const [newAssigneeName, setNewAssigneeName] = useState('');
+  const [newAssigneeEmail, setNewAssigneeEmail] = useState('');
+  const [newAssigneePassword, setNewAssigneePassword] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-
-  const handleAddSubmit = (event) => {
-    event.preventDefault();
-    if (!newAssigneeName.trim()) return;
-    onAddAssignee(newAssigneeName.trim());
-    setNewAssigneeName('');
-  };
-
-  const [editingName, setEditingName] = useState(null);
-  const [renameValue, setRenameValue] = useState('');
+  const [editingAssignee, setEditingAssignee] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPassword, setEditPassword] = useState('');
   const [editError, setEditError] = useState('');
 
-  const handleStartEdit = (name) => {
-    setEditingName(name);
-    setRenameValue(name);
+  const handleAddSubmit = async (event) => {
+    event.preventDefault();
+    if (!newAssigneeName.trim() || !newAssigneeEmail.trim() || !newAssigneePassword.trim()) return;
+    const created = await onAddAssignee({
+      name: newAssigneeName.trim(),
+      email: newAssigneeEmail.trim(),
+      password: newAssigneePassword,
+    });
+    if (!created) {
+      return;
+    }
+    setNewAssigneeName('');
+    setNewAssigneeEmail('');
+    setNewAssigneePassword('');
+    setShowAddModal(false);
+  };
+
+  const openEditModal = (profile) => {
+    setEditingAssignee(profile);
+    setEditName(profile.name);
+    setEditEmail(profile.email || '');
+    setEditPassword('');
     setEditError('');
   };
 
-  const handleCancel = () => {
-    setEditingName(null);
-    setRenameValue('');
+  const closeEditModal = () => {
+    setEditingAssignee(null);
+    setEditName('');
+    setEditEmail('');
+    setEditPassword('');
     setEditError('');
   };
 
-  const handleSave = (oldName) => {
-    const trimmed = renameValue.trim();
-    if (!trimmed) {
+  const handleEditSubmit = async (event) => {
+    event.preventDefault();
+
+    const trimmedName = editName.trim();
+    const trimmedEmail = editEmail.trim().toLowerCase();
+
+    if (!trimmedName) {
       setEditError('Name is required');
       return;
     }
-    if (trimmed === oldName) {
-      handleCancel();
+
+    if (!trimmedEmail) {
+      setEditError('Email is required');
       return;
     }
-    if (assignees.includes(trimmed)) {
-      setEditError('Already exists');
+
+    const updated = await onUpdateAssignee(editingAssignee.name, {
+      name: trimmedName,
+      email: trimmedEmail,
+      password: editPassword,
+    });
+
+    if (!updated) {
       return;
     }
-    onRenameAssignee(oldName, trimmed);
-    handleCancel();
+
+    closeEditModal();
   };
 
   return (
     <div>
       <div className="compact-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', padding: '0.2rem 0.5rem' }}>
         <span className="compact-label" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text)', textTransform: 'none', letterSpacing: 'normal' }}>Assignees</span>
-        <button
-          className="nav-link-btn nav-link-cta"
-          onClick={() => {
-            setNewAssigneeName('');
-            setShowAddModal(true);
-          }}
-          style={{ padding: '0.55rem 1.2rem', borderRadius: '12px', fontSize: '0.82rem', fontWeight: 800 }}
-        >
-          + Add Assignee
-        </button>
+        {isAdmin && (
+          <button
+            className="nav-link-btn nav-link-cta"
+            onClick={() => {
+              setNewAssigneeName('');
+              setNewAssigneeEmail('');
+              setNewAssigneePassword('');
+              setShowAddModal(true);
+            }}
+            style={{ padding: '0.55rem 1.2rem', borderRadius: '12px', fontSize: '0.82rem', fontWeight: 800 }}
+          >
+            + Add Assignee
+          </button>
+        )}
       </div>
 
       <div className="content-panel team-panel" style={{ margin: 0 }}>
@@ -82,40 +121,22 @@ export default function AssigneeList({ assignees, tasks, onSelectAssignee, onAdd
             <tr>
               <th style={{ width: '80px', textAlign: 'center' }}>No</th>
               <th style={{ textAlign: 'center' }}>Name</th>
+              <th style={{ textAlign: 'center' }}>Email</th>
               <th style={{ textAlign: 'center' }}>Active</th>
               <th style={{ textAlign: 'center' }}>Done</th>
               <th style={{ width: '120px', textAlign: 'center' }}>Action</th>
             </tr>
           </thead>
           <tbody>
-            {assignees.map((name, index) => {
-              const pendingCount = allTasks.filter((task) => task.assignee === name && task.status !== 'Complete').length;
-              const completedCount = allTasks.filter((task) => task.assignee === name && task.status === 'Complete').length;
-              const isEditing = name === editingName;
+            {assigneeProfiles.map((profile, index) => {
+              const pendingCount = allTasks.filter((task) => task.assignee === profile.name && task.status !== 'Complete').length;
+              const completedCount = allTasks.filter((task) => task.assignee === profile.name && task.status === 'Complete').length;
 
               return (
-                <tr key={name} className="hoverable">
+                <tr key={profile.name} className="hoverable">
                   <td className="team-index" style={{ textAlign: 'center' }}>{index + 1}</td>
-                  <td className="team-name" style={{ textAlign: 'center' }}>
-                    {isEditing ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          className="search-input"
-                          style={{ width: '100%', height: '36px', padding: '0.4rem 0.8rem', borderRadius: '8px', textAlign: 'center' }}
-                          value={renameValue}
-                          onChange={(event) => {
-                            setRenameValue(event.target.value);
-                            setEditError('');
-                          }}
-                          autoFocus
-                        />
-                        {editError && <span style={{ color: 'var(--accent)', fontSize: '0.74rem', fontWeight: 700 }}>{editError}</span>}
-                      </div>
-                    ) : (
-                      name
-                    )}
-                  </td>
+                  <td className="team-name" style={{ textAlign: 'center' }}>{profile.name}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--muted)' }}>{profile.email || '-'}</td>
                   <td style={{ textAlign: 'center' }}>
                     <span className="status-badge pending team-count-badge" style={{ cursor: 'default' }}>
                       {pendingCount} Active
@@ -127,25 +148,16 @@ export default function AssigneeList({ assignees, tasks, onSelectAssignee, onAdd
                     </span>
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    {isEditing ? (
-                      <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
-                        <button className="table-action-btn" onClick={() => handleSave(name)} title="Save name">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        </button>
-                        <button className="table-action-btn cancel" onClick={handleCancel} title="Cancel">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                        </button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
-                        <button className="table-action-btn" onClick={() => onSelectAssignee(name)} title="View Tasks">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        </button>
-                        <button className="table-action-btn rename" onClick={() => handleStartEdit(name)} title="Edit name">
+                    <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
+                      <button className="table-action-btn" onClick={() => onSelectAssignee(profile.name)} title="View Tasks">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                      </button>
+                      {isAdmin && (
+                        <button className="table-action-btn rename" onClick={() => openEditModal(profile)} title="Edit assignee">
                           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -157,47 +169,76 @@ export default function AssigneeList({ assignees, tasks, onSelectAssignee, onAdd
       {showAddModal && (
         <div className="modal-overlay-bg" onClick={() => setShowAddModal(false)}>
           <div className="mockup-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(400px, 100%)', padding: '1.8rem' }}>
-            <button className="mockup-modal-close" onClick={() => setShowAddModal(false)}>×</button>
+            <button className="mockup-modal-close" onClick={() => setShowAddModal(false)}>x</button>
 
             <div className="card-header" style={{ borderBottom: 'none', padding: 0, marginBottom: '0.8rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Add Assignee</h3>
               <p style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.2rem' }}>Create a member to assign tasks to.</p>
             </div>
 
-            <form onSubmit={(e) => {
-              handleAddSubmit(e);
-              setShowAddModal(false);
-            }} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+            <form onSubmit={handleAddSubmit} autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
               <div className="mockup-form-group">
                 <label className="field-label" htmlFor="new-assignee-name">Name</label>
-                <input
-                  id="new-assignee-name"
-                  type="text"
-                  placeholder="assignee-name"
-                  className="mockup-select"
-                  style={{ width: '100%' }}
-                  value={newAssigneeName}
-                  onChange={(event) => setNewAssigneeName(event.target.value)}
-                  required
-                  autoFocus
-                />
+                <input id="new-assignee-name" type="text" placeholder="Full name" className="mockup-select" style={{ width: '100%' }} value={newAssigneeName} onChange={(event) => setNewAssigneeName(event.target.value)} required autoComplete="off" autoFocus />
+              </div>
+
+              <div className="mockup-form-group">
+                <label className="field-label" htmlFor="new-assignee-email">Email</label>
+                <input id="new-assignee-email" type="email" placeholder="Enter the email" className="mockup-select" style={{ width: '100%' }} value={newAssigneeEmail} onChange={(event) => setNewAssigneeEmail(event.target.value)} autoComplete="off" required />
+              </div>
+
+              <div className="mockup-form-group">
+                <label className="field-label" htmlFor="new-assignee-password">Password</label>
+                <input id="new-assignee-password" type="password" placeholder="Create a password" className="mockup-select" style={{ width: '100%' }} value={newAssigneePassword} onChange={(event) => setNewAssigneePassword(event.target.value)} autoComplete="new-password" required />
               </div>
 
               <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.5rem' }}>
-                <button
-                  type="button"
-                  className="nav-link-btn"
-                  onClick={() => setShowAddModal(false)}
-                  style={{ flex: 1, justifyContent: 'center', background: 'rgba(33, 53, 71, 0.06)', color: 'var(--text)' }}
-                >
+                <button type="button" className="nav-link-btn" onClick={() => setShowAddModal(false)} style={{ flex: 1, justifyContent: 'center', background: 'rgba(33, 53, 71, 0.06)', color: 'var(--text)' }}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="nav-link-btn nav-link-cta"
-                  style={{ flex: 1.5, justifyContent: 'center' }}
-                >
+                <button type="submit" className="nav-link-btn nav-link-cta" style={{ flex: 1.5, justifyContent: 'center' }}>
                   Add Member
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingAssignee && (
+        <div className="modal-overlay-bg" onClick={closeEditModal}>
+          <div className="mockup-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(430px, 100%)', padding: '1.8rem' }}>
+            <button className="mockup-modal-close" onClick={closeEditModal}>x</button>
+
+            <div className="card-header" style={{ borderBottom: 'none', padding: 0, marginBottom: '0.8rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Edit Assignee</h3>
+              <p style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.2rem' }}>Modify the full assignee details here.</p>
+            </div>
+
+            <form onSubmit={handleEditSubmit} autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              <div className="mockup-form-group">
+                <label className="field-label" htmlFor="edit-assignee-name">Name</label>
+                <input id="edit-assignee-name" type="text" placeholder="Full name" className="mockup-select" style={{ width: '100%' }} value={editName} onChange={(event) => { setEditName(event.target.value); setEditError(''); }} required autoComplete="off" autoFocus />
+              </div>
+
+              <div className="mockup-form-group">
+                <label className="field-label" htmlFor="edit-assignee-email">Email</label>
+                <input id="edit-assignee-email" type="email" placeholder="Enter the email" className="mockup-select" style={{ width: '100%' }} value={editEmail} onChange={(event) => { setEditEmail(event.target.value); setEditError(''); }} autoComplete="off" required />
+              </div>
+
+              <div className="mockup-form-group">
+                <label className="field-label" htmlFor="edit-assignee-password">Password</label>
+                <input id="edit-assignee-password" type="password" placeholder="Leave blank to keep current password" className="mockup-select" style={{ width: '100%' }} value={editPassword} onChange={(event) => { setEditPassword(event.target.value); setEditError(''); }} autoComplete="new-password" />
+              </div>
+
+              {editError && <div style={{ color: 'var(--accent)', fontSize: '0.78rem', fontWeight: 700 }}>{editError}</div>}
+
+              <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.5rem' }}>
+                <button type="button" className="nav-link-btn" onClick={closeEditModal} style={{ flex: 1, justifyContent: 'center', background: 'rgba(33, 53, 71, 0.06)', color: 'var(--text)' }}>
+                  Cancel
+                </button>
+                <button type="submit" className="nav-link-btn nav-link-cta" style={{ flex: 1.5, justifyContent: 'center' }}>
+                  Save Changes
                 </button>
               </div>
             </form>
@@ -207,3 +248,5 @@ export default function AssigneeList({ assignees, tasks, onSelectAssignee, onAdd
     </div>
   );
 }
+
+

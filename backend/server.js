@@ -2,14 +2,15 @@ import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 
 dotenv.config();
-console.log({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-});
+
+// Helper to hash password using SHA-256
+function hashPassword(password) {
+  if (!password) return '';
+  return crypto.createHash('sha256').update(password).digest('hex');
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -50,9 +51,22 @@ async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS assignees (
           id INT AUTO_INCREMENT PRIMARY KEY,
           name VARCHAR(100) UNIQUE NOT NULL,
+          email VARCHAR(255) UNIQUE DEFAULT NULL,
+          password VARCHAR(255) DEFAULT NULL,
+          role VARCHAR(20) DEFAULT 'user',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+
+    try {
+      await pool.query('ALTER TABLE assignees ADD COLUMN email VARCHAR(255) UNIQUE DEFAULT NULL');
+    } catch (e) {}
+    try {
+      await pool.query('ALTER TABLE assignees ADD COLUMN password VARCHAR(255) DEFAULT NULL');
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE assignees ADD COLUMN role VARCHAR(20) DEFAULT 'user'");
+    } catch (e) {}
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tasks (
@@ -79,6 +93,60 @@ async function initializeDatabase() {
       CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          username VARCHAR(50) UNIQUE NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // Drop legacy users table if it exists
+    try {
+      await pool.query('DROP TABLE IF EXISTS users');
+    } catch (e) {}
+
+    // Seed default admin user in assignees table if not present.
+    const adminName = process.env.ADMIN_NAME || 'admin';
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.ADMIN_USERNAME || 'adminN@gmail.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin';
+    const hashedPassword = hashPassword(adminPassword);
+
+    const [existingAdmin] = await pool.query(
+      'SELECT * FROM assignees WHERE email = ? OR name = ? OR name = ?',
+      [adminEmail, adminName, adminEmail]
+    );
+
+    if (existingAdmin.length === 0) {
+      await pool.query(
+        'INSERT INTO assignees (name, email, password, role) VALUES (?, ?, ?, ?)',
+        [adminName, adminEmail, hashedPassword, 'admin']
+      );
+      console.log('Seeded default admin credentials with separate name and email.');
+    } else {
+      const adminRecord = existingAdmin[0];
+      if (
+        adminRecord.password === null ||
+        adminRecord.password.length !== 64 ||
+        adminRecord.role !== 'admin' ||
+        adminRecord.email !== adminEmail ||
+        adminRecord.name !== adminName
+      ) {
+        await pool.query(
+          'UPDATE assignees SET name = ?, email = ?, password = ?, role = ? WHERE id = ?',
+          [adminName, adminEmail, hashedPassword, 'admin', adminRecord.id]
+        );
+        console.log('Updated existing admin record with separate name, email, password, and role.');
+      }
+    }
+
+    // Set default password for any other assignees who do not have a password
+    try {
+      const defaultUserHashed = hashPassword('password');
+      await pool.query('UPDATE assignees SET password = ? WHERE password IS NULL', [defaultUserHashed]);
+    } catch (e) {}
+
     try {
       await pool.query("CREATE INDEX idx_tasks_parent ON tasks(parent_id)");
     } catch (e) { }
@@ -98,14 +166,16 @@ async function initializeDatabase() {
 
     console.log('? Database schema synchronized.');
     console.log('? Startup skipped demo seed data.');
+    return true;
   } catch (err) {
     console.error('? Failed to initialize database schema: ', err.message);
+    throw err;
   }
 }
 
 // Helper: Find assignee ID by name
 async function getAssigneeIdByName(name) {
-  if (!name || name === 'Unassigned') return null;
+  if (!name || name === 'Unallocated') return null;
   const [rows] = await pool.query('SELECT id FROM assignees WHERE name = ?', [name]);
   return rows.length > 0 ? rows[0].id : null;
 }
@@ -138,7 +208,7 @@ function buildTree(list, parentId = null) {
       title: t.title,
       status: t.status,
       dueDate: formatDate(t.due_date),
-      assignee: t.assignee_name || 'Unassigned',
+      assignee: t.assignee_name || 'Unallocated',
       subtasks: buildTree(list, t.id)
     }));
 }
@@ -183,6 +253,38 @@ async function syncRootParentStatus(taskId) {
 }
 
 // --- API Endpoints ---
+
+// Admin login credentials check
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: 'Email and password are required.' });
+  }
+
+  try {
+    await pool.query('SELECT 1');
+    const hashedPassword = hashPassword(password);
+    const [rows] = await pool.query('SELECT * FROM assignees WHERE (email = ? OR name = ?) AND password = ?', [email, email, hashedPassword]);
+    if (rows.length > 0) {
+      const user = rows[0];
+      return res.json({ 
+        success: true, 
+        token: 'mock-jwt-admin-token',
+        user: {
+          name: user.name,
+          email: user.email || email,
+          role: user.role
+        }
+      });
+    } else {
+      return res.status(401).json({ success: false, error: 'Invalid username or password' });
+    }
+  } catch (err) {
+    console.error('Login failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Database error occurred during login.' });
+  }
+});
 
 // Fetch all tasks in hierarchical tree representation
 app.get('/api/tasks', async (req, res) => {
@@ -308,7 +410,7 @@ app.delete('/api/tasks/:id', async (req, res) => {
 // Fetch list of all assignees
 app.get('/api/assignees', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT name FROM assignees ORDER BY name ASC');
+    const [rows] = await pool.query("SELECT name FROM assignees WHERE COALESCE(role, 'user') <> 'admin' ORDER BY name ASC");
     const names = rows.map(r => r.name);
     res.json(names);
   } catch (err) {
@@ -318,31 +420,103 @@ app.get('/api/assignees', async (req, res) => {
 
 // Create a new assignee registry profile
 app.post('/api/assignees', async (req, res) => {
-  const { name } = req.body;
-  if (!name || name.trim() === '') {
+  const { name, email, password } = req.body;
+  const trimmedName = name?.trim();
+  const trimmedEmail = email?.trim().toLowerCase();
+
+  if (!trimmedName) {
     return res.status(400).json({ error: 'Name is required' });
+  }
+  if (!trimmedEmail) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+  if (!password || password.trim() === '') {
+    return res.status(400).json({ error: 'Password is required' });
   }
 
   try {
-    await pool.query('INSERT INTO assignees (name) VALUES (?)', [name.trim()]);
+    await pool.query(
+      'INSERT INTO assignees (name, email, password, role) VALUES (?, ?, ?, ?)',
+      [trimmedName, trimmedEmail, hashPassword(password.trim()), 'user']
+    );
     res.status(201).json({ success: true });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Name or email already exists.' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/assignees/details', async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT name, email FROM assignees WHERE COALESCE(role, 'user') <> 'admin' ORDER BY name ASC");
+    res.json(rows.map((row) => ({
+      name: row.name,
+      email: row.email || ''
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Listen on start
-app.listen(PORT, async () => {
-  console.log(`🚀 Express Backend Server listening on http://localhost:${PORT}`);
-  await initializeDatabase();
+app.put('/api/assignees/:name', async (req, res) => {
+  const currentName = decodeURIComponent(req.params.name);
+  const nextName = req.body.name?.trim();
+  const nextEmail = req.body.email?.trim().toLowerCase();
+  const nextPassword = req.body.password?.trim();
+
+  if (!nextName) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+
+  if (!nextEmail) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  try {
+    const [existingRows] = await pool.query(
+      "SELECT id FROM assignees WHERE name = ? AND COALESCE(role, 'user') <> 'admin' LIMIT 1",
+      [currentName]
+    );
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({ error: 'Assignee not found.' });
+    }
+
+    const assigneeId = existingRows[0].id;
+    const setClause = ['name = ?', 'email = ?'];
+    const values = [nextName, nextEmail];
+
+    if (nextPassword) {
+      setClause.push('password = ?');
+      values.push(hashPassword(nextPassword));
+    }
+
+    values.push(assigneeId);
+
+    await pool.query(`UPDATE assignees SET ${setClause.join(', ')} WHERE id = ?`, values);
+    res.json({ success: true });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Name or email already exists.' });
+    }
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// Initialize database before accepting requests.
+async function startServer() {
+  try {
+    await initializeDatabase();
+    app.listen(PORT, () => {
+      console.log(`Express Backend Server listening on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('Server startup aborted:', err.message);
+    process.exit(1);
+  }
+}
 
-
-
-
-
-
-
-
+startServer();
 
