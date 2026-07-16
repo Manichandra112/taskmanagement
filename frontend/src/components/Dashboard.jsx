@@ -82,11 +82,15 @@ export default function Dashboard({ tasks, assignees }) {
     .sort((a, b) => b.dueDate.localeCompare(a.dueDate) || a.title.localeCompare(b.title))
     .slice(0, 4);
 
+  const assigned   = leafTasks.filter((t) => t.assignee && t.assignee !== 'Unallocated').length;
+  const unassigned = leafTasks.filter((t) => !t.assignee || t.assignee === 'Unallocated').length;
+
   const summaryMetrics = [
-    { label: 'Leaf Tasks', value: leafTasks.length, note: 'Actionable work items', tone: 'total' },
-    { label: 'Pending', value: stats.pending, note: 'Waiting to start', tone: 'pending' },
-    { label: 'In Progress', value: stats.inProgress, note: 'Currently moving', tone: 'inprogress' },
-    { label: 'Completed', value: stats.complete, note: `${completionRate}% completion`, tone: 'complete' },
+    { label: 'Total Tasks',  value: leafTasks.length, note: 'All actionable items',    tone: 'total' },
+    { label: 'Assigned',     value: assigned,          note: 'Have an owner',           tone: 'assigned' },
+    { label: 'Unassigned',   value: unassigned,        note: 'Need to be allocated',    tone: 'unassigned' },
+    { label: 'In Progress',  value: stats.inProgress,  note: 'Currently being worked',  tone: 'inprogress' },
+    { label: 'Completed',    value: stats.complete,    note: `${completionRate}% done`, tone: 'complete' },
   ];
 
   return (

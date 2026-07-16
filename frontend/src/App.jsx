@@ -8,6 +8,7 @@ import CustomDropdown from './components/CustomDropdown';
 import Login from './components/Login';
 import DatePicker from './components/DatePicker';
 import ToastViewport from './components/ToastViewport';
+import { useConfirm } from './components/ConfirmModal';
 
 const API_BASE = 'http://localhost:5000/api';
 
@@ -51,6 +52,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [toasts, setToasts] = useState([]);
+  const { confirmModal, openConfirm } = useConfirm();
 
   const notify = ({ type = 'success', title = '', message }) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -70,10 +72,9 @@ export default function App() {
     setIsAdminLoggedIn(true);
   };
 
-  const handleLogout = () => {
-    if (!window.confirm('Are you sure you want to logout?')) {
-      return;
-    }
+  const handleLogout = async () => {
+    const ok = await openConfirm({ title: 'Logout', message: 'Are you sure you want to log out of TaskFlow?', confirmLabel: 'Logout', danger: false });
+    if (!ok) return;
 
     localStorage.removeItem('isAdminLoggedIn');
     localStorage.removeItem('adminToken');
@@ -191,9 +192,8 @@ export default function App() {
       const finalAssignee = modalAssignee;
       const actionLabel = editingTask ? 'save these task changes' : 'create this task';
 
-      if (!window.confirm(`Are you sure you want to ${actionLabel}?`)) {
-        return;
-      }
+      const ok = await openConfirm({ title: editingTask ? 'Save Changes' : 'Create Task', message: `Are you sure you want to ${actionLabel}?`, confirmLabel: editingTask ? 'Save' : 'Create' });
+      if (!ok) return;
 
       if (editingTask) {
         const response = await fetch(`${API_BASE}/tasks/${editingTask.id}`, {
@@ -247,14 +247,13 @@ export default function App() {
     if (updatedFields.assignee !== undefined) {
       const nextAssignee = updatedFields.assignee;
       const targetLabel = nextAssignee === 'Unallocated' ? 'Unallocated' : nextAssignee;
-      const confirmed = window.confirm(`Are you sure you want to assign "${taskTitle}" to ${targetLabel}?`);
-      if (!confirmed) {
-        return;
-      }
+      const confirmed = await openConfirm({ title: 'Reassign Task', message: `Assign "${taskTitle}" to ${targetLabel}?`, confirmLabel: 'Assign' });
+      if (!confirmed) return;
     }
 
-    if (updatedFields.status !== undefined && !window.confirm(`Are you sure you want to change the status of "${taskTitle}" to ${updatedFields.status}?`)) {
-      return;
+    if (updatedFields.status !== undefined) {
+      const ok = await openConfirm({ title: 'Change Status', message: `Move "${taskTitle}" to ${updatedFields.status}?`, confirmLabel: 'Change' });
+      if (!ok) return;
     }
 
     try {
@@ -283,9 +282,8 @@ export default function App() {
   };
 
   const handleDeleteTask = async (taskId) => {
-    if (!window.confirm('Are you sure you want to delete this task and its subtasks?')) {
-      return;
-    }
+    const ok = await openConfirm({ title: 'Delete Task', message: 'This will permanently delete the task and all its subtasks. This cannot be undone.', confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
 
     try {
       const task = flattenTasks(tasks).find((item) => item.id === taskId);
@@ -302,9 +300,8 @@ export default function App() {
   };
 
   const handleImportTasks = async (newTasks) => {
-    if (!window.confirm(`Are you sure you want to import ${newTasks.length} tasks?`)) {
-      return;
-    }
+    const ok = await openConfirm({ title: 'Import Tasks', message: `Import ${newTasks.length} task${newTasks.length !== 1 ? 's' : ''} into the workspace?`, confirmLabel: 'Import' });
+    if (!ok) return;
 
     const uploadTask = async (task, parentId = null, knownAssignees = new Set(assignees)) => {
       if (task.assignee && task.assignee !== 'Unallocated' && !knownAssignees.has(task.assignee)) {
@@ -353,9 +350,8 @@ export default function App() {
       return false;
     }
 
-    if (!window.confirm(`Are you sure you want to add ${trimmedName} as a new assignee?`)) {
-      return false;
-    }
+    const ok = await openConfirm({ title: 'Add Member', message: `Add "${trimmedName}" as a new team member?`, confirmLabel: 'Add Member' });
+    if (!ok) return false;
 
     try {
       const response = await fetch(`${API_BASE}/assignees`, {
@@ -399,9 +395,8 @@ export default function App() {
       return false;
     }
 
-    if (!window.confirm(`Are you sure you want to update ${currentName}?`)) {
-      return false;
-    }
+    const ok = await openConfirm({ title: 'Update Member', message: `Save changes for "${currentName}"?`, confirmLabel: 'Save' });
+    if (!ok) return false;
 
     try {
       const res = await fetch(`${API_BASE}/assignees/${encodeURIComponent(currentName)}`, {
@@ -534,7 +529,7 @@ export default function App() {
   };
 
   if (!isAdminLoggedIn) {
-    return <><Login onLoginSuccess={handleLoginSuccess} onNotify={notify} /><ToastViewport toasts={toasts} /></>;
+    return <><Login onLoginSuccess={handleLoginSuccess} onNotify={notify} /><ToastViewport toasts={toasts} />{confirmModal}</>
   }
 
   return (
@@ -553,6 +548,7 @@ export default function App() {
         {renderActiveView()}
       </main>
       <ToastViewport toasts={toasts} />
+      {confirmModal}
 
       {isModalOpen && (
         <div className="modal-overlay-bg" onClick={closeModal}>
