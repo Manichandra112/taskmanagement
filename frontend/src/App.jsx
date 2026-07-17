@@ -179,17 +179,11 @@ export default function App() {
 
   const handleOpenCreateModal = () => {
     resetModal();
-    if (currentUser?.name) {
-      setModalAssignee(currentUser.name);
-    }
     setIsModalOpen(true);
   };
 
   const handleOpenSubtaskModal = (parentId, parentTitle) => {
     resetModal();
-    if (currentUser?.name) {
-      setModalAssignee(currentUser.name);
-    }
     setParentTaskId(parentId);
     setParentTaskTitle(parentTitle);
     setIsModalOpen(true);
@@ -644,5 +638,6 @@ export default function App() {
     </div>
   );
 }
+
 
 

@@ -18,7 +18,7 @@ const MONTH_NAMES = [
 const WEEKDAY_NAMES = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 function parseIsoDate(value) {
-  if (!value) return null;
+  if (!value || typeof value !== 'string') return null;
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) {
     return null;
@@ -157,7 +157,7 @@ export default function DatePicker({ id, value, onChange, required, min, max }) 
   };
 
   const handleSelect = (iso) => {
-    onChange({ target: { value: iso } });
+    onChange(iso);
     setIsOpen(false);
   };
 
@@ -299,7 +299,7 @@ export default function DatePicker({ id, value, onChange, required, min, max }) 
               type="button"
               className="date-picker-footer-btn"
               onClick={() => {
-                onChange({ target: { value: todayIso } });
+                onChange(todayIso);
                 setViewDate(new Date());
                 setIsOpen(false);
               }}
@@ -312,3 +312,5 @@ export default function DatePicker({ id, value, onChange, required, min, max }) 
     </div>
   );
 }
+
+

@@ -140,17 +140,18 @@ function TaskRowNode({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const effectiveStatus = getEffectiveStatus(task);
-  const { completed: completedCount, total: totalCount } = getDirectSubtaskSummary(task);
-  const isParentTask = totalCount > 0;
-  const isRootParent = (task.parent_id === null || task.parent_id === undefined) && totalCount > 0;
-  const subtaskAssignees = isRootParent ? getSubtaskAssigneesRecursive(task, filterAssignee) : [];
+  const allSubtasks = task.subtasks || [];
+  const visibleSubtasks = task.visibleSubtasks ?? allSubtasks;
+  const { completed: completedCount, total: totalCount } = getDirectSubtaskSummary({ ...task, subtasks: allSubtasks });
+  const isParentTask = visibleSubtasks.length > 0;
+  const isRootParent = (task.parent_id === null || task.parent_id === undefined) && allSubtasks.length > 0;
+  const subtaskAssignees = isRootParent ? getSubtaskAssigneesRecursive({ ...task, subtasks: allSubtasks }, filterAssignee) : [];
   const expanded = isExpanded;
-  const progress = getProgressPercent(task);
+  const progress = getProgressPercent({ ...task, subtasks: allSubtasks });
   const displayDate = task.dueDate || todayDate;
 
 
   const cycleStatus = () => {
-    if (!isAdmin) return;
     if (!task.assignee || task.assignee === 'Unallocated') {
       return;
     }
@@ -239,9 +240,9 @@ function TaskRowNode({
     <div className="card-col-status">
       <span
         className={`status-badge ${effectiveStatus.toLowerCase().replace(/\s+/g, '')}`}
-        onClick={(isRootParent || isUnallocated || !isAdmin) ? undefined : cycleStatus}
+        onClick={(isRootParent || isUnallocated) ? undefined : cycleStatus}
         style={{ 
-          cursor: isRootParent ? 'default' : (isUnallocated ? 'not-allowed' : (isAdmin ? 'pointer' : 'default')),
+          cursor: isRootParent ? 'default' : (isUnallocated ? 'not-allowed' : 'pointer'),
           opacity: isUnallocated && !isRootParent ? 0.65 : 1
         }}
         title={isUnallocated && !isRootParent ? "Assign a person to change status" : ""}
@@ -253,22 +254,19 @@ function TaskRowNode({
 
   const actionButtons = (
     <div className="card-col-actions">
-      {isAdmin && (
-        <div className="hover-actions-group">
-          <button className="action-btn-circle add" onClick={() => onAddSubtaskClick(task.id, task.title)} title="Add Subtask">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          </button>
-          <button className="action-btn-circle edit" onClick={() => onOpenEditTask(task)} title="Edit Task">
-            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-          </button>
-          <button className="action-btn-circle delete" onClick={() => onDeleteTask(task.id)} title="Delete Task">
-            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-          </button>
-        </div>
-      )}
+      <div className="hover-actions-group">
+        <button className="action-btn-circle add" onClick={() => onAddSubtaskClick(task.id, task.title)} title="Add Subtask">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <button className="action-btn-circle edit" onClick={() => onOpenEditTask(task)} title="Edit Task">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+        <button className="action-btn-circle delete" onClick={() => onDeleteTask(task.id)} title="Delete Task">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+        </button>
+      </div>
     </div>
   );
-
   if (depth === 0) {
     return (
       <div className={`parent-task-card task-surface ${effectiveStatus.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -277,8 +275,8 @@ function TaskRowNode({
           <div className="card-col-title">
             <div style={{ width: '100%' }}>
               {task.parentPath && task.parentPath.length > 0 && (
-                <div style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>
-                  {task.parentPath.join(' › ')}
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 700, marginBottom: '0.35rem' }}>
+                  Path: {task.parentPath.join(' > ')}
                 </div>
               )}
               <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -310,9 +308,9 @@ function TaskRowNode({
           {actionButtons}
         </div>
 
-        {expanded && task.subtasks?.length > 0 && (
+        {expanded && visibleSubtasks.length > 0 && (
           <div className="subtasks-panel">
-            {task.subtasks.map((child) => (
+            {visibleSubtasks.map((child) => (
               <TaskRowNode
                 key={child.id}
                 task={child}
@@ -372,9 +370,9 @@ function TaskRowNode({
         {actionButtons}
       </div>
 
-      {expanded && task.subtasks?.length > 0 && (
+      {expanded && visibleSubtasks.length > 0 && (
         <div className="subtasks-panel">
-          {task.subtasks.map((child) => (
+          {visibleSubtasks.map((child) => (
             <TaskRowNode
               key={child.id}
               task={child}
@@ -446,44 +444,33 @@ export default function TaskList({
     return null;
   }).filter(Boolean);
 
-  const getFlatFilteredList = (list) => {
-    const flat = [];
-    const walk = (nodes, parentPath = []) => {
-      nodes.forEach((task) => {
-        const isLeaf = !task.subtasks || task.subtasks.length === 0;
+  const getTodayDisplayTree = (list, parentPath = []) => {
+    const items = [];
 
-        const matchesAssignee = filterAssignee === 'all' || task.assignee === filterAssignee;
-        const matchesStatus = filterStatus === 'all' || getEffectiveStatus(task) === filterStatus;
+    list.forEach((task) => {
+      const matchesAssignee = filterAssignee === 'all' || task.assignee === filterAssignee;
+      const matchesStatus = filterStatus === 'all' || getEffectiveStatus(task) === filterStatus;
+      const matchesToday = task.dueDate === todayDate && getEffectiveStatus(task) !== 'Complete';
+      const currentPath = [...parentPath, task.title];
+      const visibleSubtasks = getTodayDisplayTree(task.subtasks || [], currentPath);
 
-        let matchesView = true;
-        if (viewMode === 'today') {
-          matchesView = task.dueDate === todayDate && getEffectiveStatus(task) !== 'Complete';
-        } else if (viewMode === 'completed') {
-          matchesView = getEffectiveStatus(task) === 'Complete';
-        }
+      if (matchesAssignee && matchesStatus && matchesToday) {
+        items.push({
+          ...task,
+          parentPath,
+          visibleSubtasks,
+        });
+      } else {
+        items.push(...visibleSubtasks);
+      }
+    });
 
-        const currentPath = [...parentPath, task.title];
-
-        if (isLeaf && matchesAssignee && matchesStatus && matchesView) {
-          flat.push({
-            ...task,
-            parentPath: parentPath,
-            subtasks: [],
-          });
-        }
-
-        if (task.subtasks?.length) {
-          walk(task.subtasks, currentPath);
-        }
-      });
-    };
-    walk(list);
-    return flat;
+    return items;
   };
 
   const filteredTree = getFilteredTree(tasks);
   const searchActive = filterAssignee !== 'all' || filterStatus !== 'all' || viewMode !== 'all';
-  const displayTree = filteredTree;
+  const displayTree = viewMode === 'today' ? getTodayDisplayTree(tasks) : filteredTree;
 
   const titleMap = {
     today: `Today Tasks - ${getTodayHeading()}`,
@@ -573,5 +560,15 @@ export default function TaskList({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
 
 
