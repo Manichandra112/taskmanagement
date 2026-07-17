@@ -54,7 +54,7 @@ const getDateLabel = (dueDate, todayDate) => {
 };
 
 const getTaskHealth = (task, todayDate) => {
-  if (task.status === 'Complete') return 'Complete';
+  if (task.status === 'Complete') return 'Completed';
   if (task.dueDate < todayDate) return 'Delayed';
   if (task.dueDate === todayDate) return 'Due Today';
   return 'Upcoming';
@@ -186,6 +186,7 @@ export default function Dashboard({ tasks }) {
     </div>
   );
 }
+
 
 
 

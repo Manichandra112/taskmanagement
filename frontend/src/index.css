@@ -177,9 +177,27 @@ button {
 
 .page-title-sec h2,
 .dashboard-card h3 {
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-size: 1.9rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  color: #1d3348;
+  line-height: 1.1;
+}
+
+.page-title-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  position: relative;
+}
+
+.page-title-sec::after {
+  content: '';
+  width: 3.4rem;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #c96c50, #e6b48b);
+  margin-top: 0.15rem;
 }
 
 .page-title-sec p,
@@ -878,6 +896,10 @@ select.mockup-select {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.team-table tbody tr.hoverable:hover {
+  background: linear-gradient(180deg, rgba(233, 242, 250, 0.92) 0%, rgba(224, 237, 248, 0.92) 100%);
+}
+
 .team-index {
   color: var(--muted);
   font-weight: 700;
@@ -993,17 +1015,34 @@ select.mockup-select {
 
 .mockup-modal-close {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  width: 1.8rem;
-  height: 1.8rem;
-  border: none;
+  top: 0.95rem;
+  right: 0.95rem;
+  width: 2.35rem;
+  height: 2.35rem;
+  border: 1px solid rgba(239, 35, 35, 0.34);
   border-radius: 999px;
-  background: rgba(33, 53, 71, 0.06);
-  color: var(--muted);
+  background: #ef2323;
+  color: #ffffff;
+  font-size: 1.28rem;
+  font-weight: 900;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 10px 20px rgba(239, 35, 35, 0.24);
+  transition: transform 180ms ease, background-color 180ms ease, color 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.mockup-modal-close:hover {
+  transform: rotate(90deg) scale(1.06);
+  background: #d91d1d;
+  color: #ffffff;
+  border-color: rgba(255, 120, 120, 0.38);
+  box-shadow: 0 14px 24px rgba(239, 35, 35, 0.3);
+}
+
+.mockup-modal-close:active {
+  transform: rotate(90deg) scale(0.94);
 }
 
 .mockup-modal-title {
@@ -2540,6 +2579,12 @@ select.mockup-select {
 .confirm-btn-danger:hover {
   box-shadow: 0 14px 28px rgba(180, 87, 58, 0.38);
 }
+
+
+
+
+
+
 
 
 

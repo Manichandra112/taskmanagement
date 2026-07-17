@@ -375,12 +375,20 @@ app.put('/api/tasks/:id', async (req, res) => {
   }
 });
 
-// Delete a task (MySQL CASCADE handles child deletion automatically)
+// Delete a task only when it has no child tasks.
 app.delete('/api/tasks/:id', async (req, res) => {
   const taskId = req.params.id;
   try {
-    const [rows] = await pool.query('SELECT parent_id FROM tasks WHERE id = ?', [taskId]);
-    const parentId = rows.length > 0 ? rows[0].parent_id : null;
+    const [rows] = await pool.query('SELECT id, parent_id, title FROM tasks WHERE id = ?', [taskId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Task not found.' });
+    }
+
+    const { parent_id: parentId, title } = rows[0];
+    const [childRows] = await pool.query('SELECT id FROM tasks WHERE parent_id = ? LIMIT 1', [taskId]);
+    if (childRows.length > 0) {
+      return res.status(409).json({ error: `Cannot delete \"${title}\" because it still has child tasks.` });
+    }
 
     await pool.query('DELETE FROM tasks WHERE id = ?', [taskId]);
 
@@ -422,22 +430,17 @@ app.get('/api/assignees', async (req, res) => {
 app.post('/api/assignees', async (req, res) => {
   const { name, email, password } = req.body;
   const trimmedName = name?.trim();
-  const trimmedEmail = email?.trim().toLowerCase();
+  const trimmedEmail = email?.trim().toLowerCase() || null;
+  const trimmedPassword = password?.trim();
 
   if (!trimmedName) {
     return res.status(400).json({ error: 'Name is required' });
-  }
-  if (!trimmedEmail) {
-    return res.status(400).json({ error: 'Email is required' });
-  }
-  if (!password || password.trim() === '') {
-    return res.status(400).json({ error: 'Password is required' });
   }
 
   try {
     await pool.query(
       'INSERT INTO assignees (name, email, password, role) VALUES (?, ?, ?, ?)',
-      [trimmedName, trimmedEmail, hashPassword(password.trim()), 'user']
+      [trimmedName, trimmedEmail, trimmedPassword ? hashPassword(trimmedPassword) : null, 'user']
     );
     res.status(201).json({ success: true });
   } catch (err) {

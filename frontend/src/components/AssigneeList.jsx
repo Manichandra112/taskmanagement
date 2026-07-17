@@ -30,6 +30,7 @@ export default function AssigneeList({
   const [newAssigneeName, setNewAssigneeName] = useState('');
   const [newAssigneeEmail, setNewAssigneeEmail] = useState('');
   const [newAssigneePassword, setNewAssigneePassword] = useState('');
+  const [addError, setAddError] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAssignee, setEditingAssignee] = useState(null);
   const [editName, setEditName] = useState('');
@@ -39,7 +40,11 @@ export default function AssigneeList({
 
   const handleAddSubmit = async (event) => {
     event.preventDefault();
-    if (!newAssigneeName.trim() || !newAssigneeEmail.trim() || !newAssigneePassword.trim()) return;
+    if (!newAssigneeName.trim()) {
+      setAddError('Name is required');
+      return;
+    }
+
     const created = await onAddAssignee({
       name: newAssigneeName.trim(),
       email: newAssigneeEmail.trim(),
@@ -51,6 +56,7 @@ export default function AssigneeList({
     setNewAssigneeName('');
     setNewAssigneeEmail('');
     setNewAssigneePassword('');
+    setAddError('');
     setShowAddModal(false);
   };
 
@@ -101,10 +107,9 @@ export default function AssigneeList({
 
   return (
     <div>
-      <div className="compact-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', padding: '0.2rem 0.5rem' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-          <span className="compact-label" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text)', textTransform: 'none', letterSpacing: 'normal' }}>Assignees</span>
-          
+      <div className="compact-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.2rem', padding: '0 0.5rem 0.35rem' }}>
+        <div className="page-title-sec">
+          <h2 style={{ margin: 0 }}>Assignees</h2>
         </div>
         {isAdmin && (
           <button
@@ -113,6 +118,7 @@ export default function AssigneeList({
               setNewAssigneeName('');
               setNewAssigneeEmail('');
               setNewAssigneePassword('');
+              setAddError('');
               setShowAddModal(true);
             }}
             style={{ padding: '0.55rem 1.2rem', borderRadius: '12px', fontSize: '0.82rem', fontWeight: 800 }}
@@ -186,18 +192,20 @@ export default function AssigneeList({
             <form onSubmit={handleAddSubmit} autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
               <div className="mockup-form-group">
                 <label className="field-label" htmlFor="new-assignee-name">Name</label>
-                <input id="new-assignee-name" type="text" placeholder="Full name" className="mockup-select" style={{ width: '100%' }} value={newAssigneeName} onChange={(event) => setNewAssigneeName(event.target.value)} required autoComplete="off" autoFocus />
+                <input id="new-assignee-name" type="text" placeholder="Full name" className="mockup-select" style={{ width: '100%' }} value={newAssigneeName} onChange={(event) => { setNewAssigneeName(event.target.value); setAddError(''); }} required autoComplete="off" autoFocus />
               </div>
 
               <div className="mockup-form-group">
-                <label className="field-label" htmlFor="new-assignee-email">Email</label>
-                <input id="new-assignee-email" type="email" placeholder="Enter the email" className="mockup-select" style={{ width: '100%' }} value={newAssigneeEmail} onChange={(event) => setNewAssigneeEmail(event.target.value)} autoComplete="off" required />
+                <label className="field-label" htmlFor="new-assignee-email">Email <span style={{ color: "var(--muted)", fontWeight: 500 }}>(optional)</span></label>
+                <input id="new-assignee-email" type="email" placeholder="Enter the email" className="mockup-select" style={{ width: '100%' }} value={newAssigneeEmail} onChange={(event) => { setNewAssigneeEmail(event.target.value); setAddError(''); }} autoComplete="off" />
               </div>
 
               <div className="mockup-form-group">
-                <label className="field-label" htmlFor="new-assignee-password">Password</label>
-                <input id="new-assignee-password" type="password" placeholder="Create a password" className="mockup-select" style={{ width: '100%' }} value={newAssigneePassword} onChange={(event) => setNewAssigneePassword(event.target.value)} autoComplete="new-password" required />
+                <label className="field-label" htmlFor="new-assignee-password">Password <span style={{ color: "var(--muted)", fontWeight: 500 }}>(optional)</span></label>
+                <input id="new-assignee-password" type="password" placeholder="Create a password" className="mockup-select" style={{ width: '100%' }} value={newAssigneePassword} onChange={(event) => { setNewAssigneePassword(event.target.value); setAddError(''); }} autoComplete="new-password" />
               </div>
+
+              {addError && <div style={{ color: 'var(--accent)', fontSize: '0.78rem', fontWeight: 700 }}>{addError}</div>}
 
               <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.5rem' }}>
                 <button type="button" className="nav-link-btn" onClick={() => setShowAddModal(false)} style={{ flex: 1, justifyContent: 'center', background: 'rgba(33, 53, 71, 0.06)', color: 'var(--text)' }}>
@@ -255,3 +263,4 @@ export default function AssigneeList({
     </div>
   );
 }
+

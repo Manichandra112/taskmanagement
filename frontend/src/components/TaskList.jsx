@@ -66,6 +66,8 @@ const getInitials = (name) => {
   return clean.substring(0, 2).toUpperCase();
 };
 
+const formatStatusLabel = (status) => status === 'Complete' ? 'Completed' : status;
+
 const getAvatarColor = (name) => {
   if (!name || name === 'Unallocated') return '#8a8f99';
   const colors = ['#c96c50', '#2f7f73', '#476c9b', '#c28b44', '#8f5f94', '#4f8c61'];
@@ -134,6 +136,7 @@ function TaskRowNode({
   todayDate,
   filterAssignee,
   isAdmin,
+  canAssignTasks,
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const effectiveStatus = getEffectiveStatus(task);
@@ -224,7 +227,7 @@ function TaskRowNode({
             onChange={handleAssigneeChange}
             options={['Unallocated', ...assignees]}
             style={{ width: '140px' }}
-            disabled={!isAdmin}
+            disabled={!canAssignTasks}
           />
         </div>
       )}
@@ -243,7 +246,7 @@ function TaskRowNode({
         }}
         title={isUnallocated && !isRootParent ? "Assign a person to change status" : ""}
       >
-        {effectiveStatus}
+        {formatStatusLabel(effectiveStatus)}
       </span>
     </div>
   );
@@ -323,6 +326,7 @@ function TaskRowNode({
                 todayDate={todayDate}
                 filterAssignee={filterAssignee}
                 isAdmin={isAdmin}
+                canAssignTasks={canAssignTasks}
               />
             ))}
           </div>
@@ -384,6 +388,7 @@ function TaskRowNode({
               todayDate={todayDate}
               filterAssignee={filterAssignee}
               isAdmin={isAdmin}
+              canAssignTasks={canAssignTasks}
             />
           ))}
         </div>
@@ -404,6 +409,7 @@ export default function TaskList({
   selectedAssigneeFilter,
   onResetAssigneeFilter,
   isAdmin,
+  canAssignTasks,
 }) {
   const todayDate = getTodayDate();
   const [filterAssignee, setFilterAssignee] = useState(selectedAssigneeFilter || 'all');
@@ -532,7 +538,7 @@ export default function TaskList({
               { value: 'all', label: 'All Statuses' },
               { value: 'Pending', label: 'Pending' },
               { value: 'In Progress', label: 'In Progress' },
-              { value: 'Complete', label: 'Complete' }
+              { value: 'Complete', label: 'Completed' }
             ]}
             style={{ width: 'calc(100% - 24px)', margin: '0 auto' }}
           />
@@ -554,8 +560,9 @@ export default function TaskList({
             searchActive={searchActive}
             todayDate={todayDate}
             filterAssignee={filterAssignee}
-            isAdmin={isAdmin}
-          />
+              isAdmin={isAdmin}
+              canAssignTasks={canAssignTasks}
+            />
         )) : (
           <div className="empty-state-card">
             <div className="empty-state-title">No matching tasks</div>
@@ -566,4 +573,5 @@ export default function TaskList({
     </div>
   );
 }
+
 

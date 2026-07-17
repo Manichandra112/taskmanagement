@@ -8,9 +8,21 @@ import CustomDropdown from './components/CustomDropdown';
 import Login from './components/Login';
 import DatePicker from './components/DatePicker';
 import ToastViewport from './components/ToastViewport';
-import { useConfirm } from './components/ConfirmModal';
 
 const API_BASE = 'http://localhost:5000/api';
+const VIEW_PATHS = {
+  dashboard: '/dashboard',
+  today: '/today',
+  all: '/all',
+  completed: '/completed',
+  assignees: '/assignees',
+};
+
+const resolveViewFromPath = (pathname = '/') => {
+  const normalizedPath = pathname === '/' ? '/dashboard' : pathname.toLowerCase();
+  const match = Object.entries(VIEW_PATHS).find(([, path]) => path === normalizedPath);
+  return match?.[0] || 'dashboard';
+};
 
 const getTodayDate = () => {
   const now = new Date();
@@ -47,12 +59,11 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
   const [assignees, setAssignees] = useState([]);
   const [assigneeProfiles, setAssigneeProfiles] = useState([]);
-  const [activeView, setActiveView] = useState('dashboard');
+  const [activeView, setActiveView] = useState(() => resolveViewFromPath(window.location.pathname));
   const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [toasts, setToasts] = useState([]);
-  const { confirmModal, openConfirm } = useConfirm();
 
   const notify = ({ type = 'success', title = '', message }) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -73,9 +84,6 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    const ok = await openConfirm({ title: 'Logout', message: 'Are you sure you want to log out of TaskFlow?', confirmLabel: 'Logout', danger: false });
-    if (!ok) return;
-
     localStorage.removeItem('isAdminLoggedIn');
     localStorage.removeItem('adminToken');
     localStorage.removeItem('userRole');
@@ -83,6 +91,8 @@ export default function App() {
     localStorage.removeItem('userEmail');
     setCurrentUser(null);
     setIsAdminLoggedIn(false);
+    setActiveView('dashboard');
+    window.history.replaceState({}, '', VIEW_PATHS.dashboard);
     notify({ type: 'success', title: 'Logged Out', message: 'You have been logged out successfully.' });
   };
 
@@ -96,6 +106,22 @@ export default function App() {
   const [isAddingNewAssignee, setIsAddingNewAssignee] = useState(false);
 
   const todayDate = getTodayDate();
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveView(resolveViewFromPath(window.location.pathname));
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const nextPath = VIEW_PATHS[activeView] || VIEW_PATHS.dashboard;
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, '', nextPath);
+    }
+  }, [activeView]);
 
   const fetchTasksAndAssignees = async (signal) => {
     setLoadError('');
@@ -153,11 +179,17 @@ export default function App() {
 
   const handleOpenCreateModal = () => {
     resetModal();
+    if (currentUser?.name) {
+      setModalAssignee(currentUser.name);
+    }
     setIsModalOpen(true);
   };
 
   const handleOpenSubtaskModal = (parentId, parentTitle) => {
     resetModal();
+    if (currentUser?.name) {
+      setModalAssignee(currentUser.name);
+    }
     setParentTaskId(parentId);
     setParentTaskTitle(parentTitle);
     setIsModalOpen(true);
@@ -190,10 +222,6 @@ export default function App() {
 
     try {
       const finalAssignee = modalAssignee;
-      const actionLabel = editingTask ? 'save these task changes' : 'create this task';
-
-      const ok = await openConfirm({ title: editingTask ? 'Save Changes' : 'Create Task', message: `Are you sure you want to ${actionLabel}?`, confirmLabel: editingTask ? 'Save' : 'Create' });
-      if (!ok) return;
 
       if (editingTask) {
         const response = await fetch(`${API_BASE}/tasks/${editingTask.id}`, {
@@ -244,18 +272,6 @@ export default function App() {
   const handleUpdateTaskField = async (taskId, updatedFields, task) => {
     const taskTitle = task?.title || 'Task';
 
-    if (updatedFields.assignee !== undefined) {
-      const nextAssignee = updatedFields.assignee;
-      const targetLabel = nextAssignee === 'Unallocated' ? 'Unallocated' : nextAssignee;
-      const confirmed = await openConfirm({ title: 'Reassign Task', message: `Assign "${taskTitle}" to ${targetLabel}?`, confirmLabel: 'Assign' });
-      if (!confirmed) return;
-    }
-
-    if (updatedFields.status !== undefined) {
-      const ok = await openConfirm({ title: 'Change Status', message: `Move "${taskTitle}" to ${updatedFields.status}?`, confirmLabel: 'Change' });
-      if (!ok) return;
-    }
-
     try {
       const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
         method: 'PUT',
@@ -282,14 +298,23 @@ export default function App() {
   };
 
   const handleDeleteTask = async (taskId) => {
-    const ok = await openConfirm({ title: 'Delete Task', message: 'This will permanently delete the task and all its subtasks. This cannot be undone.', confirmLabel: 'Delete', danger: true });
-    if (!ok) return;
+    const task = flattenTasks(tasks).find((item) => item.id === taskId);
+    const hasChildren = Boolean(task?.subtasks?.length);
+
+    if (hasChildren) {
+      notify({
+        type: 'warning',
+        title: 'Delete Blocked',
+        message: `${task?.title || 'This task'} cannot be deleted until all child tasks are removed.`,
+      });
+      return;
+    }
 
     try {
-      const task = flattenTasks(tasks).find((item) => item.id === taskId);
       const response = await fetch(`${API_BASE}/tasks/${taskId}`, { method: 'DELETE' });
       if (!response.ok) {
-        throw new Error('Failed to delete task');
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.error || 'Failed to delete task');
       }
       await refreshData(false);
       notify({ type: 'success', title: 'Task Deleted', message: `${task?.title || 'Task'} was deleted successfully.` });
@@ -300,8 +325,6 @@ export default function App() {
   };
 
   const handleImportTasks = async (newTasks) => {
-    const ok = await openConfirm({ title: 'Import Tasks', message: `Import ${newTasks.length} task${newTasks.length !== 1 ? 's' : ''} into the workspace?`, confirmLabel: 'Import' });
-    if (!ok) return;
 
     const uploadTask = async (task, parentId = null, knownAssignees = new Set(assignees)) => {
       if (task.assignee && task.assignee !== 'Unallocated' && !knownAssignees.has(task.assignee)) {
@@ -344,20 +367,24 @@ export default function App() {
   const handleAddAssignee = async ({ name, email, password }) => {
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedName) {
+      notify({ type: 'warning', title: 'Missing Name', message: 'Please enter the assignee name.' });
+      return false;
+    }
+
 
     if (assignees.includes(trimmedName) || trimmedName === 'Unallocated') {
       notify({ type: 'warning', title: 'Duplicate Assignee', message: 'Assignee already exists.' });
       return false;
     }
 
-    const ok = await openConfirm({ title: 'Add Member', message: `Add "${trimmedName}" as a new team member?`, confirmLabel: 'Add Member' });
-    if (!ok) return false;
-
     try {
       const response = await fetch(`${API_BASE}/assignees`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName, email: trimmedEmail, password }),
+        body: JSON.stringify({ name: trimmedName, email: trimmedEmail, password: trimmedPassword }),
       });
 
       if (!response.ok) {
@@ -394,9 +421,6 @@ export default function App() {
       notify({ type: 'warning', title: 'Duplicate Assignee', message: `${trimmedName} already exists.` });
       return false;
     }
-
-    const ok = await openConfirm({ title: 'Update Member', message: `Save changes for "${currentName}"?`, confirmLabel: 'Save' });
-    if (!ok) return false;
 
     try {
       const res = await fetch(`${API_BASE}/assignees/${encodeURIComponent(currentName)}`, {
@@ -470,6 +494,7 @@ export default function App() {
           onAddSubtaskClick={handleOpenSubtaskModal}
           viewMode="today"
           isAdmin={currentUser?.role === 'admin'}
+          canAssignTasks={Boolean(currentUser)}
         />
       );
     }
@@ -488,6 +513,7 @@ export default function App() {
           selectedAssigneeFilter={selectedAssigneeFilter}
           onResetAssigneeFilter={() => setSelectedAssigneeFilter(null)}
           isAdmin={currentUser?.role === 'admin'}
+          canAssignTasks={Boolean(currentUser)}
         />
       );
     }
@@ -504,6 +530,7 @@ export default function App() {
           onAddSubtaskClick={handleOpenSubtaskModal}
           viewMode="completed"
           isAdmin={currentUser?.role === 'admin'}
+          canAssignTasks={Boolean(currentUser)}
         />
       );
     }
@@ -521,15 +548,16 @@ export default function App() {
           onAddAssignee={handleAddAssignee}
           onUpdateAssignee={handleUpdateAssignee}
           isAdmin={currentUser?.role === 'admin'}
+          canAssignTasks={Boolean(currentUser)}
         />
       );
     }
 
-    return <ApiConverterView tasks={tasks} onImportTasks={handleImportTasks} onNotify={notify} />;
+    return <Dashboard tasks={tasks} assignees={assignees} />;
   };
 
   if (!isAdminLoggedIn) {
-    return <><Login onLoginSuccess={handleLoginSuccess} onNotify={notify} /><ToastViewport toasts={toasts} />{confirmModal}</>
+    return <><Login onLoginSuccess={handleLoginSuccess} onNotify={notify} /><ToastViewport toasts={toasts} /></>
   }
 
   return (
@@ -547,99 +575,63 @@ export default function App() {
       <main className="main-content">
         {renderActiveView()}
       </main>
-      <ToastViewport toasts={toasts} />
-      {confirmModal}
 
       {isModalOpen && (
         <div className="modal-overlay-bg" onClick={closeModal}>
-          <div className="mockup-modal" onClick={(event) => event.stopPropagation()} style={{ width: 'min(500px, 100%)', padding: '1.8rem' }}>
-            <button className="mockup-modal-close" onClick={closeModal}>×</button>
-            
-            <div className="card-header" style={{ borderBottom: 'none', padding: 0, marginBottom: '1.2rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>
-                {editingTask ? 'Edit Task' : parentTaskId ? 'Add Subtask' : 'Create Task'}
-              </h3>
-              
+          <div className="mockup-modal" onClick={(event) => event.stopPropagation()}>
+            <button className="mockup-modal-close" onClick={closeModal}>x</button>
+
+            <div className="card-header" style={{ borderBottom: 'none', padding: 0 }}>
+              <h3>{editingTask ? 'Edit Task' : parentTaskId ? 'Add Subtask' : 'Create New Task'}</h3>
+              {/* <p>
+                {editingTask
+                  ? 'Modify the selected task properties.'
+                  : parentTaskId
+                    ? 'Create a child task under the selected parent.'
+                    : 'Add a new top-level task to the board.'}
+              </p> */}
             </div>
 
-            {parentTaskTitle && (
-              <div className="modal-parent-note" style={{ padding: '0.65rem 0.85rem', fontSize: '0.85rem', marginBottom: '1.2rem' }}>
-                Parent: <strong>{parentTaskTitle}</strong>
+            {parentTaskTitle && <div className="modal-parent-note">Parent: {parentTaskTitle}</div>}
+
+            <form onSubmit={handleModalSubmit} className="mockup-form" style={{ marginTop: '1rem' }}>
+              <div className="mockup-form-grid two-col">
+                <div className="mockup-form-group">
+                  <label className="field-label">Assignee</label>
+                  <CustomDropdown
+                    value={modalAssignee}
+                    onChange={(event) => setModalAssignee(event.target.value)}
+                    options={['Unallocated', ...assignees]}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div className="mockup-form-group">
+                  <label className="field-label">Date</label>
+                  <DatePicker
+                    value={modalDueDate}
+                    onChange={(value) => setModalDueDate(value)}
+                    required
+                  />
+                </div>
               </div>
-            )}
-
-            <form onSubmit={handleModalSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-              {editingTask?.parent_id === null && editingTask?.subtasks?.length ? (
-                <div>
-                  
-                  <div className="mockup-form-group">
-                    <label className="field-label" htmlFor="task-date">Date</label>
-                    <DatePicker
-                      id="task-date"
-                      required
-                      value={modalDueDate}
-                      onChange={(event) => setModalDueDate(event.target.value)}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="mockup-form-group" style={{ marginBottom: 0 }}>
-                    <label className="field-label" htmlFor="assignee-select">Assignee</label>
-                    <CustomDropdown
-                      value={isAddingNewAssignee ? '_new_' : modalAssignee}
-                      onChange={(event) => {
-                        const val = event.target.value;
-                        if (val === '_new_') {
-                          setIsAddingNewAssignee(true);
-                        } else {
-                          setIsAddingNewAssignee(false);
-                          setModalAssignee(val);
-                        }
-                      }}
-                      options={[
-                        { value: 'Unallocated', label: 'Unallocated' },
-                        ...assignees.map((name) => ({ value: name, label: name }))
-                      ]}
-                    />
-                  </div>
-
-                  <div className="mockup-form-group" style={{ marginBottom: 0 }}>
-                    <label className="field-label" htmlFor="task-date">Date</label>
-                    <DatePicker
-                      id="task-date"
-                      required
-                      value={modalDueDate}
-                      onChange={(event) => setModalDueDate(event.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-
 
               <div className="mockup-form-group">
-                <label className="field-label" htmlFor="task-description">Task Details</label>
+                <label className="field-label">Task Details</label>
                 <textarea
-                  id="task-description"
-                  className="mockup-textarea"
-                  style={{ minHeight: '80px' }}
-                  placeholder="Describe the task clearly"
-                  required
+                  className="mockup-input mockup-textarea"
                   value={modalDescription}
                   onChange={(event) => setModalDescription(event.target.value)}
+                  placeholder="Describe the task clearly"
+                  required
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.4rem' }}>
-                <button
-                  type="button"
-                  className="nav-link-btn"
-                  style={{ flex: 1, justifyContent: 'center', background: 'rgba(33, 53, 71, 0.06)', color: 'var(--text)' }}
-                  onClick={closeModal}
-                >
+              <div className="mockup-actions-row" style={{ justifyContent: 'space-between', marginTop: '1.1rem' }}>
+                <button type="button" className="nav-link-btn" onClick={closeModal} style={{ minWidth: '180px', justifyContent: 'center' }}>
                   Cancel
                 </button>
-                <button type="submit" className="nav-link-btn nav-link-cta" style={{ flex: 1.5, justifyContent: 'center' }}>
+                <button type="submit" className="nav-link-btn nav-link-cta" style={{ minWidth: '250px', justifyContent: 'center' }}>
                   {editingTask ? 'Save Changes' : 'Create Task'}
                 </button>
               </div>
@@ -647,12 +639,10 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <ToastViewport toasts={toasts} />
     </div>
   );
 }
-
-
-
-
 
 
