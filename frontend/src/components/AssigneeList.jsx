@@ -147,20 +147,20 @@ export default function AssigneeList({
 
               return (
                 <tr key={profile.name} className="hoverable">
-                  <td className="team-index" style={{ textAlign: 'center' }}>{index + 1}</td>
-                  <td className="team-name" style={{ textAlign: 'center' }}>{profile.name}</td>
-                  <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--muted)' }}>{profile.email || '-'}</td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td className="team-index" data-label="No" style={{ textAlign: 'center' }}>{index + 1}</td>
+                  <td className="team-name" data-label="Name" style={{ textAlign: 'center' }}>{profile.name}</td>
+                  <td data-label="Email" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--muted)' }}>{profile.email || '-'}</td>
+                  <td data-label="Open Tasks" style={{ textAlign: 'center' }}>
                     <span className="status-badge pending team-count-badge" style={{ cursor: 'default' }}>
                       {openCount} Open
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Completed Tasks" style={{ textAlign: 'center' }}>
                     <span className="status-badge complete team-count-badge" style={{ cursor: 'default' }}>
                       {completedCount} Completed
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td className="team-action-cell" data-label="Action" style={{ textAlign: 'center' }}>
                     <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
                       <button className="table-action-btn" onClick={() => onSelectAssignee(profile.name)} title="View Tasks">
                         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>

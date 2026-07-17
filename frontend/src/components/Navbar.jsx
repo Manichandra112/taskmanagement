@@ -1,4 +1,3 @@
-
 const NAV_ITEMS = [
   {
     key: 'dashboard',
