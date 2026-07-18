@@ -275,8 +275,13 @@ function TaskRowNode({
           <div className="card-col-title">
             <div style={{ width: '100%' }}>
               {task.parentPath && task.parentPath.length > 0 && (
-                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 700, marginBottom: '0.35rem' }}>
-                  Path: {task.parentPath.join(' > ')}
+                <div className="today-breadcrumb-trail">
+                  {task.parentPath.map((seg, i) => (
+                    <span key={i} className="today-breadcrumb-chip">
+                      {i > 0 && <span className="today-breadcrumb-sep">›</span>}
+                      {seg}
+                    </span>
+                  ))}
                 </div>
               )}
               <div style={{ display: 'flex', alignItems: 'center' }}>
