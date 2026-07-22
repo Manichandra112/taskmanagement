@@ -64,6 +64,18 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [toasts, setToasts] = useState([]);
+  const [expandedViews, setExpandedViews] = useState({
+    today: false,
+    all: false,
+    completed: false,
+  });
+
+  const handleToggleExpandAllView = (viewKey, val) => {
+    setExpandedViews((prev) => ({
+      ...prev,
+      [viewKey]: val !== undefined ? val : !prev[viewKey],
+    }));
+  };
 
   const notify = ({ type = 'success', title = '', message }) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -479,6 +491,7 @@ export default function App() {
     if (activeView === 'today') {
       return (
         <TaskList
+          key="today"
           tasks={tasks}
           assignees={assignees}
           onUpdateTask={handleUpdateTaskField}
@@ -489,6 +502,8 @@ export default function App() {
           viewMode="today"
           isAdmin={currentUser?.role === 'admin'}
           canAssignTasks={Boolean(currentUser)}
+          expandAll={expandedViews.today}
+          onToggleExpandAll={(val) => handleToggleExpandAllView('today', val)}
         />
       );
     }
@@ -496,6 +511,7 @@ export default function App() {
     if (activeView === 'all') {
       return (
         <TaskList
+          key="all"
           tasks={tasks}
           assignees={assignees}
           onUpdateTask={handleUpdateTaskField}
@@ -508,6 +524,8 @@ export default function App() {
           onResetAssigneeFilter={() => setSelectedAssigneeFilter(null)}
           isAdmin={currentUser?.role === 'admin'}
           canAssignTasks={Boolean(currentUser)}
+          expandAll={expandedViews.all}
+          onToggleExpandAll={(val) => handleToggleExpandAllView('all', val)}
         />
       );
     }
@@ -515,6 +533,7 @@ export default function App() {
     if (activeView === 'completed') {
       return (
         <TaskList
+          key="completed"
           tasks={tasks}
           assignees={assignees}
           onUpdateTask={handleUpdateTaskField}
@@ -525,6 +544,8 @@ export default function App() {
           viewMode="completed"
           isAdmin={currentUser?.role === 'admin'}
           canAssignTasks={Boolean(currentUser)}
+          expandAll={expandedViews.completed}
+          onToggleExpandAll={(val) => handleToggleExpandAllView('completed', val)}
         />
       );
     }

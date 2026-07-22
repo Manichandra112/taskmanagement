@@ -137,8 +137,15 @@ function TaskRowNode({
   filterAssignee,
   isAdmin,
   canAssignTasks,
+  expandAll,
+  viewMode,
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(expandAll);
+
+  React.useEffect(() => {
+    setIsExpanded(expandAll);
+  }, [expandAll]);
+
   const effectiveStatus = getEffectiveStatus(task);
   const allSubtasks = task.subtasks || [];
   const visibleSubtasks = task.visibleSubtasks ?? allSubtasks;
@@ -149,7 +156,6 @@ function TaskRowNode({
   const expanded = isExpanded;
   const progress = getProgressPercent({ ...task, subtasks: allSubtasks });
   const displayDate = task.dueDate || todayDate;
-
 
   const cycleStatus = () => {
     if (!task.assignee || task.assignee === 'Unallocated') {
@@ -267,6 +273,7 @@ function TaskRowNode({
       </div>
     </div>
   );
+
   if (depth === 0) {
     return (
       <div className={`parent-task-card task-surface ${effectiveStatus.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -317,7 +324,7 @@ function TaskRowNode({
           <div className="subtasks-panel">
             {visibleSubtasks.map((child) => (
               <TaskRowNode
-                key={child.id}
+                key={`${viewMode}-${child.id}`}
                 task={child}
                 depth={depth + 1}
                 assignees={assignees}
@@ -330,6 +337,8 @@ function TaskRowNode({
                 filterAssignee={filterAssignee}
                 isAdmin={isAdmin}
                 canAssignTasks={canAssignTasks}
+                expandAll={expandAll}
+                viewMode={viewMode}
               />
             ))}
           </div>
@@ -379,7 +388,7 @@ function TaskRowNode({
         <div className="subtasks-panel">
           {visibleSubtasks.map((child) => (
             <TaskRowNode
-              key={child.id}
+              key={`${viewMode}-${child.id}`}
               task={child}
               depth={depth + 1}
               assignees={assignees}
@@ -392,6 +401,8 @@ function TaskRowNode({
               filterAssignee={filterAssignee}
               isAdmin={isAdmin}
               canAssignTasks={canAssignTasks}
+              expandAll={expandAll}
+              viewMode={viewMode}
             />
           ))}
         </div>
@@ -413,10 +424,23 @@ export default function TaskList({
   onResetAssigneeFilter,
   isAdmin,
   canAssignTasks,
+  expandAll: propExpandAll,
+  onToggleExpandAll,
 }) {
   const todayDate = getTodayDate();
   const [filterAssignee, setFilterAssignee] = useState(selectedAssigneeFilter || 'all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [localExpandAll, setLocalExpandAll] = useState(false);
+
+  const expandAll = propExpandAll !== undefined ? propExpandAll : localExpandAll;
+
+  const handleToggleExpandAll = () => {
+    if (onToggleExpandAll) {
+      onToggleExpandAll(!expandAll);
+    } else {
+      setLocalExpandAll((prev) => !prev);
+    }
+  };
 
   React.useEffect(() => {
     if (selectedAssigneeFilter) {
@@ -485,23 +509,65 @@ export default function TaskList({
 
   return (
     <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
         <div className="page-title-sec">
           <h2>{titleMap[viewMode]}</h2>
         </div>
 
-        {selectedAssigneeFilter && selectedAssigneeFilter !== 'all' && (
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <button
-            className="nav-link-btn"
-            style={{ padding: '0.55rem 1.2rem', borderRadius: '12px', fontSize: '0.82rem', border: '1px solid var(--line)', background: 'transparent' }}
-            onClick={() => {
-              setFilterAssignee('all');
-              onResetAssigneeFilter();
+            type="button"
+            className="expand-all-btn"
+            onClick={handleToggleExpandAll}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.55rem 1.1rem',
+              borderRadius: '12px',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              border: '1px solid var(--line-strong)',
+              background: 'var(--surface-strong)',
+              color: 'var(--text)',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+              cursor: 'pointer',
+              transition: 'all 180ms ease',
             }}
           >
-            Clear Filter
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                transform: expandAll ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 200ms ease',
+              }}
+            >
+              <polyline points="7 13 12 18 17 13" />
+              <polyline points="7 6 12 11 17 6" />
+            </svg>
+            <span>{expandAll ? 'Collapse All Subtasks' : 'Expand All Subtasks'}</span>
           </button>
-        )}
+
+          {selectedAssigneeFilter && selectedAssigneeFilter !== 'all' && (
+            <button
+              className="nav-link-btn"
+              style={{ padding: '0.55rem 1.2rem', borderRadius: '12px', fontSize: '0.82rem', border: '1px solid var(--line)', background: 'transparent' }}
+              onClick={() => {
+                setFilterAssignee('all');
+                onResetAssigneeFilter();
+              }}
+            >
+              Clear Filter
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="table-header-row">
@@ -541,7 +607,7 @@ export default function TaskList({
       <div className="cards-stack">
         {displayTree.length > 0 ? displayTree.map((task) => (
           <TaskRowNode
-            key={task.id}
+            key={`${viewMode}-${task.id}`}
             task={task}
             depth={0}
             assignees={assignees}
@@ -552,9 +618,11 @@ export default function TaskList({
             searchActive={searchActive}
             todayDate={todayDate}
             filterAssignee={filterAssignee}
-              isAdmin={isAdmin}
-              canAssignTasks={canAssignTasks}
-            />
+            isAdmin={isAdmin}
+            canAssignTasks={canAssignTasks}
+            expandAll={expandAll}
+            viewMode={viewMode}
+          />
         )) : (
           <div className="empty-state-card">
             <div className="empty-state-title">No matching tasks</div>
@@ -565,15 +633,3 @@ export default function TaskList({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-

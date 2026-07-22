@@ -3158,3 +3158,14 @@ select.mockup-select {
     font-size: 1rem;
   }
 }
+
+.expand-all-btn:hover {
+  background: var(--surface-soft) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-strong) !important;
+  box-shadow: 0 4px 14px rgba(201, 108, 80, 0.12) !important;
+}
+
+.expand-all-btn:active {
+  transform: scale(0.98);
+}
